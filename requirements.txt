@@ -4,3 +4,5 @@ matplotlib
 seaborn
 tensorflow
 tensorflow_cpu
+scikit-learn
+pydot
