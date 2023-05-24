@@ -17,3 +17,5 @@ install the requirements
 ```
 pip install -r requirements.txt
 ```
+
+# MEF ( Multi-Exposure image Fusion )
