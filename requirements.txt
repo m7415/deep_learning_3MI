@@ -6,3 +6,4 @@ tensorflow
 tensorflow_cpu
 scikit-learn
 pydot
+graphviz

@@ -1,4 +1,4 @@
-from models import baby_unet, Autoencoder
+from models import UNet, Autoencoder
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adadelta
 
@@ -10,7 +10,7 @@ loss = tf.keras.losses.MeanSquaredError()
 batch_size = 16
 epochs = 5
 
-unet = baby_unet(input_size, output_size, [16, 32, 64], optimiser, loss)
+unet = UNet(input_size, output_size, [16, 32, 64], optimiser, loss)
 
 unet.summary(graph=True)
 
