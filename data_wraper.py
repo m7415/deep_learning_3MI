@@ -7,6 +7,29 @@ class Map:
         self.image = image
         self.coeff = coeff
         self.mask = mask
+    def get_center(self):
+        # return the center of the mask
+        mask = self.mask
+        center = np.array([0, 0])
+        center[0] = np.sum(mask, axis=1).argmax()
+        center[1] = np.sum(mask, axis=0).argmax()
+        return center
+    def crop_map(self, center, crop_size=None):
+        if crop_size == None:
+            return
+        image = self.image
+        mask = self.mask
+        box = np.array([center[0] - crop_size / 2, center[1] - crop_size / 2, center[0] + crop_size / 2, center[1] + crop_size / 2])
+        box = box.astype(int)
+        image = image[box[0]:box[2], box[1]:box[3]]
+        mask = mask[box[0]:box[2], box[1]:box[3]]
+        self.image = image
+        # padding
+        pad = np.ones((crop_size, crop_size))
+        pad[0:image.shape[0], 0:image.shape[1]] = image
+        self.image = pad
+        return
+
 
 class Data:
     def __init__(self, map1, map2, map3, combined, azimut):
@@ -15,11 +38,24 @@ class Data:
         self.map3 = map3
         self.combined = combined
         self.azimut = azimut
+    
+    def crop_maps(self, crop_size=None):
+        if crop_size == None:
+            return
+        center = self.map3.get_center()
+        self.map1.crop_map(center, crop_size)
+        self.map2.crop_map(center, crop_size)
+        self.map3.crop_map(center, crop_size)
+        box = np.array([center[0] - crop_size / 2, center[1] - crop_size / 2, center[0] + crop_size / 2, center[1] + crop_size / 2])
+        box = box.astype(int)
+        self.combined = self.combined[box[0]:box[2], box[1]:box[3]]
+        return
 
 class Dataset:
-    def __init__(self, file_path = None):
+    def __init__(self, file_path = None, crop=False):
         self.data_list = []
         self.data_num = 0
+        self.crop = crop
 
         if file_path != None:
             self.add_data(file_path)
@@ -44,7 +80,10 @@ class Dataset:
             combined = combined_list[i]
             azimut = azimut_list[i]
             data = Data(map1, map2, map3, combined, azimut)
-            # add data to dataframe without using append
+
+            if self.crop == True:
+                data.crop_maps(100)
+
             self.data_list.append(data)
         self.data_num += len(map_list_1)
     
@@ -92,6 +131,7 @@ class Dataset:
         for map in maps:
             image = np.abs(map.image)
             azimut = data.azimut
-            image = np.rot90(image, k=azimut)[256]
+            center = int(image.shape[0] / 2)
+            image = np.rot90(image, k=azimut)[center, :]
             plt.plot(np.log10(np.abs(image)))
         plt.show()
