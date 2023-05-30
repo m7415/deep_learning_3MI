@@ -18,16 +18,14 @@ class Map:
         if crop_size == None:
             return
         image = self.image
-        mask = self.mask
         box = np.array([center[0] - crop_size / 2, center[1] - crop_size / 2, center[0] + crop_size / 2, center[1] + crop_size / 2])
         box = box.astype(int)
         image = image[box[0]:box[2], box[1]:box[3]]
-        mask = mask[box[0]:box[2], box[1]:box[3]]
         self.image = image
         # padding
         pad = np.ones((crop_size, crop_size))
         pad[0:image.shape[0], 0:image.shape[1]] = image
-        self.image = pad
+        self.image = np.array(pad)
         return
 
 
@@ -46,9 +44,7 @@ class Data:
         self.map1.crop_map(center, crop_size)
         self.map2.crop_map(center, crop_size)
         self.map3.crop_map(center, crop_size)
-        box = np.array([center[0] - crop_size / 2, center[1] - crop_size / 2, center[0] + crop_size / 2, center[1] + crop_size / 2])
-        box = box.astype(int)
-        self.combined = self.combined[box[0]:box[2], box[1]:box[3]]
+        self.combined.crop_map(center, crop_size)
         return
 
 class Dataset:
@@ -77,7 +73,7 @@ class Dataset:
             map1 = Map(map_list_1[i], coeff_list_1[i], mask_list_1[i])
             map2 = Map(map_list_2[i], coeff_list_2[i], mask_list_2[i])
             map3 = Map(map_list_3[i], coeff_list_3[i], mask_list_3[i])
-            combined = combined_list[i]
+            combined = Map(combined_list[i], None, [])
             azimut = azimut_list[i]
             data = Data(map1, map2, map3, combined, azimut)
 
@@ -90,7 +86,7 @@ class Dataset:
     def export_dataframe(self):
         data_list = []
         for data in self.data_list:
-            data_list.append([data.map1.image, data.map1.coeff, data.map1.mask, data.map2.image, data.map2.coeff, data.map2.mask, data.map3.image, data.map3.coeff, data.map3.mask, data.combined, data.azimut])
+            data_list.append([data.map1.image, data.map1.coeff, data.map1.mask, data.map2.image, data.map2.coeff, data.map2.mask, data.map3.image, data.map3.coeff, data.map3.mask, data.combined.image, data.azimut])
         df = pd.DataFrame(data_list, columns=['Map1', 'Coeff1', 'Mask1', 'Map2', 'Coeff2', 'Mask2', 'Map3', 'Coeff3', 'Mask3', 'Combined', 'Azimut'])
         return df
     
@@ -112,7 +108,7 @@ class Dataset:
     def plot_combined(self, data_index):
         import matplotlib.pyplot as plt
         data = self.data_list[data_index]
-        plt.imshow(np.log10(np.abs(data.combined)))
+        plt.imshow(np.log10(np.abs(data.combined.image)), cmap='jet')
         plt.show()
     
     def plot_radial_profile(self, data_index, map_indexes):
