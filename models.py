@@ -6,7 +6,7 @@ from keras.utils import vis_utils
 from keras.utils.vis_utils import model_to_dot
 import pydot
 from keras.utils import plot_model
-from keras.layers import Dense, Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate
+from keras.layers import Dense, Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate, Dropout
 from keras.optimizers import Adadelta
 from keras.losses import mean_squared_error
 import matplotlib.pyplot as plt
@@ -53,6 +53,7 @@ class UNet(ModelPackage):
         input_shape,
         output_shape,
         filters,
+        dropout=0.2,
         optimizer="adam",
         loss="mean_squared_error",
     ):
@@ -60,6 +61,7 @@ class UNet(ModelPackage):
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.filters = filters
+        self.dropout = dropout
 
         self.model = self.build_model()
         self.model.compile(optimizer=self.optimizer, loss=self.loss)
@@ -225,27 +227,30 @@ class UNet(ModelPackage):
             conv2_name = f"conv_down_2_{i+1}"
             if i == 0:
                 conv1 = Conv2D(
-                    filters, 3, activation="relu", padding="same", name=conv1_name
+                    filters, 3, activation="relu", padding="same", name=conv1_name,
                 )(input_layer)
+                drop = Dropout(self.dropout)(conv1)
             else:
                 conv1 = Conv2D(
-                    filters, 3, activation="relu", padding="same", name=conv1_name
+                    filters, 3, activation="relu", padding="same", name=conv1_name,
                 )(pool)
+                drop = Dropout(self.dropout)(conv1)
 
             conv2 = Conv2D(
                 filters, 3, activation="relu", padding="same", name=conv2_name
-            )(conv1)
+            )(drop)
             pool_name = f"pool_{i+1}"
             pool = MaxPooling2D(pool_size=(2, 2), name=pool_name)(conv2)
             conv_layers_down.append((conv1, conv2))
 
         # Bottleneck
         conv_b_1 = Conv2D(
-            self.filters[-1], 3, activation="relu", padding="same", name="conv_b_1"
+            self.filters[-1], 3, activation="relu", padding="same", name="conv_b_1",
         )(pool)
+        drop = Dropout(self.dropout)(conv_b_1)
         conv_b_2 = Conv2D(
             self.filters[-1], 3, activation="relu", padding="same", name="conv_b_2"
-        )(conv_b_1)
+        )(drop)
 
         # Expansive path
         conv_layers_down = conv_layers_down[::-1]  # Reverse the list
@@ -270,16 +275,17 @@ class UNet(ModelPackage):
                 merge = concatenate([up, skip_connection], axis=-1)
 
             conv1_up = Conv2D(
-                filters, 3, activation="relu", padding="same", name=conv1_name
+                filters, 3, activation="relu", padding="same", name=conv1_name,
             )(merge)
+            drop = Dropout(self.dropout)(conv1_up)
             conv2_up = Conv2D(
                 filters, 3, activation="relu", padding="same", name=conv2_name
-            )(conv1_up)
+            )(drop)
             conv_layers_up.append((conv1_up, conv2_up))
 
         # Output
         output_layer = Conv2D(
-            self.output_shape[2], 3, activation="relu", padding="same", name="output"
+            self.output_shape[2], 3, activation="sigmoid", padding="same", name="output"
         )(conv2_up)
 
         # Build model
@@ -293,14 +299,40 @@ class UNet(ModelPackage):
         print(f"Input shape: {self.input_shape}")
         print(f"Output shape: {self.output_shape}")
         print(f"Filters: {self.filters}")
+        print(f"Dropout: {self.dropout}")
         print(f"Epochs: {self.history.params['epochs']}")
-        print(f"Batch size: {self.history.params['batch_size']}")
-        print(f"Metrics: {self.history.params['metrics']}")
+        print(f"Batch size: -")
         print(f"Loss: {self.history.history['loss']}")
         print(f"Validation loss: {self.history.history['val_loss']}")
-        print(f"Test SSIM: {self.evaluate(test_data, test_label, metrics=['ssim'])}")
-        print(f"Test PSNR: {self.evaluate(test_data, test_label, metrics=['psnr'])}")
-        print(f"Test MSE: {self.evaluate(test_data, test_label, metrics=['mse'])}")
+        print(f"Test SSIM: {self.evaluate(test_data, test_label, metric='ssim')}")
+        print(f"Test PSNR: {self.evaluate(test_data, test_label, metric='psnr')}")
+        print(f"Test MSE: {self.evaluate(test_data, test_label, metric='mse')}")
+    
+    def evaluate(self, test_data, test_label, metric):
+        pred_label = self.predict(test_data)
+        pred_label = pred_label.reshape(test_label.shape[0], test_label.shape[1], test_label.shape[2])
+        # convert to double tensor
+        pred_label = tf.convert_to_tensor(pred_label, dtype=tf.float32)
+        test_label = tf.convert_to_tensor(test_label, dtype=tf.float32)
+        if metric == "ssim":
+            return tf.reduce_mean(
+                tf.image.ssim(
+                    test_label, pred_label, max_val=1.0, filter_size=11
+                )
+            ).numpy()
+        elif metric == "psnr":
+            return tf.reduce_mean(
+                tf.image.psnr(test_label, pred_label, max_val=1.0)
+            ).numpy()
+        elif metric == "mse":
+            return tf.reduce_mean(
+                tf.keras.losses.mean_squared_error(
+                    test_label, pred_label
+                )
+            ).numpy()
+        else:
+            raise ValueError("Invalid metric")
+        
 
 
 class Autoencoder(ModelPackage):

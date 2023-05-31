@@ -9,12 +9,12 @@ loss = tf.keras.losses.MeanSquaredError()
 batch_size = 16
 epochs = 5
 
-unet = UNet(input_size, output_size, [32, 64], optimiser, loss)
+unet = UNet(input_size, output_size, [32, 64, 128, 256], optimiser, loss)
 
-unet.summary(graph=True)
+# unet.summary(graph=True)
 
 AE = Autoencoder(
     input_size, isConv=True, filters=[16, 8], optimizer=optimiser, loss=loss
 )
 
-AE.summary(graph=True)
+# AE.summary(graph=True)
