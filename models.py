@@ -11,41 +11,60 @@ from keras.optimizers import Adadelta
 from keras.losses import mean_squared_error
 import matplotlib.pyplot as plt
 
+class ModelPackage:
+    def __init__(self, optimizer, loss):
+        self.optimizer = optimizer
+        self.loss = loss
+        self.history = None
 
-class UNet:
+    def save_model(self, model_path):
+        self.model.save(model_path)
+
+    def load_model(self, model_path):
+        self.model = keras.models.load_model(model_path)
+
+    def train(self, train_data, train_label, epochs=10, batch_size=1):
+        self.history = self.model.fit(
+            train_data,
+            train_label,
+            epochs=epochs,
+            batch_size=batch_size,
+            validation_split=0.1,
+            shuffle=True,
+        )
+
+    def plot_loss(self):
+        plt.plot(self.history.history["loss"])
+        plt.plot(self.history.history["val_loss"])
+        plt.title("Model Loss")
+        plt.ylabel("Loss")
+        plt.xlabel("Epoch")
+        plt.legend(["Train", "Validation"], loc="upper left")
+        plt.show()
+
+    def predict(self, test_data):
+        return self.model.predict(test_data)
+
+# define the UNet class, which inherits from the Model class
+
+class UNet(ModelPackage):
     def __init__(
         self,
         input_shape,
         output_shape,
         filters,
-        optimizer="adadelta",
+        optimizer="adam",
         loss="mean_squared_error",
     ):
-        """
-        Initialize the UNet model.
-
-        Args:
-            input_shape (tuple): Shape of the input data (height, width, channels).
-            output_shape (tuple): Shape of the output data (height, width, channels).
-            filters (list): List of filter sizes for each layer.
-            optimizer (str): Name of the optimizer to use (default: "adadelta").
-            loss (str): Name of the loss function to use (default: "mean_squared_error").
-        """
+        super().__init__(optimizer, loss)
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.filters = filters
-        self.optimizer = optimizer
-        self.loss = loss
-        self.history = None
+
         self.model = self.build_model()
-
+        self.model.compile(optimizer=self.optimizer, loss=self.loss)
+    
     def summary(self, graph=True):
-        """
-        Print the model summary and optionally save the U-shaped graph using pydot.
-
-        Args:
-            graph (bool): Whether to save the U-shaped graph. Default is True.
-        """
         self.model.summary()
         if graph:
             dot = pydot.Dot(graph_type="digraph", rankdir="UD")
@@ -194,74 +213,8 @@ class UNet:
             dot.write_png(graph_path)
             print(f"U-shaped graph saved at: {graph_path}")
 
-    def save_model(self, model_path):
-        """
-        Save the model to a file.
-
-        Args:
-            model_path (str): Path to save the model.
-        """
-        self.model.save(model_path)
-
-    def load_model(self, model_path):
-        """
-        Load the model from a file.
-
-        Args:
-            model_path (str): Path to the saved model.
-        """
-        self.model = keras.models.load_model(model_path)
-
-    def train(self, train_data, train_label, epochs=10, batch_size=1):
-        """
-        Train the model.
-
-        Args:
-            train_data (ndarray): Training data.
-            train_label (ndarray): Training labels.
-            epochs (int): Number of training epochs (default: 10).
-            batch_size (int): Batch size for training (default: 1).
-        """
-        self.history = self.model.fit(
-            train_data,
-            train_label,
-            epochs=epochs,
-            batch_size=batch_size,
-            validation_split=0.1,
-            shuffle=True,
-        )
-
-    def plot_loss(self):
-        """
-        Plot the training and validation loss curves.
-        """
-        plt.plot(self.history.history["loss"])
-        plt.plot(self.history.history["val_loss"])
-        plt.title("Model Loss")
-        plt.ylabel("Loss")
-        plt.xlabel("Epoch")
-        plt.legend(["Train", "Validation"], loc="upper left")
-        plt.show()
-
-    def predict(self, test_data):
-        """
-        Make predictions using the trained model.
-
-        Args:
-            test_data (ndarray): Test data.
-
-        Returns:
-            ndarray: Predicted output.
-        """
-        return self.model.predict(test_data)
-
     def build_model(self):
-        """
-        Build the UNet model architecture.
 
-        Returns:
-            Model: The compiled UNet model.
-        """
         input_layer = Input(shape=self.input_shape, name="input")
         conv_layers_down = []
         pool = None
@@ -326,17 +279,31 @@ class UNet:
 
         # Output
         output_layer = Conv2D(
-            self.output_shape[2], 3, activation="sigmoid", padding="same", name="output"
+            self.output_shape[2], 3, activation="relu", padding="same", name="output"
         )(conv2_up)
 
         # Build model
         model = Model(inputs=input_layer, outputs=output_layer)
-        model.compile(optimizer=self.optimizer, loss=self.loss)
 
         return model
+    
+    def print_experiment_report(self, test_data, test_label):
+        print(f"Optimizer: {self.optimizer}")
+        print(f"Loss: {self.loss}")
+        print(f"Input shape: {self.input_shape}")
+        print(f"Output shape: {self.output_shape}")
+        print(f"Filters: {self.filters}")
+        print(f"Epochs: {self.history.params['epochs']}")
+        print(f"Batch size: {self.history.params['batch_size']}")
+        print(f"Metrics: {self.history.params['metrics']}")
+        print(f"Loss: {self.history.history['loss']}")
+        print(f"Validation loss: {self.history.history['val_loss']}")
+        print(f"Test SSIM: {self.evaluate(test_data, test_label, metrics=['ssim'])}")
+        print(f"Test PSNR: {self.evaluate(test_data, test_label, metrics=['psnr'])}")
+        print(f"Test MSE: {self.evaluate(test_data, test_label, metrics=['mse'])}")
 
 
-class Autoencoder:
+class Autoencoder(ModelPackage):
     def __init__(
         self,
         input_shape,
@@ -351,9 +318,7 @@ class Autoencoder:
         self.hidden_units = hidden_units
         self.filters = filters
 
-        self.optimizer = optimizer
-        self.loss = loss
-        self.history = None
+        super().__init__(optimizer, loss)
 
         self.model, self.encoder, self.decoder = self.build_autoencoders(isConv)
 
@@ -365,34 +330,6 @@ class Autoencoder:
             keras.utils.plot_model(
                 self.model, to_file="autoencoder.png", show_shapes=True
             )
-
-    def save_model(self, model_path):
-        self.model.save(model_path)
-
-    def load_model(self, model_path):
-        self.model = keras.models.load_model(model_path)
-
-    def train(self, train_data, train_label, epochs=10, batch_size=1):
-        self.history = self.model.fit(
-            train_data,
-            train_label,
-            epochs=epochs,
-            batch_size=batch_size,
-            validation_split=0.1,
-            shuffle=True,
-        )
-
-    def plot_loss(self):
-        plt.plot(self.history.history["loss"])
-        plt.plot(self.history.history["val_loss"])
-        plt.title("Model Loss")
-        plt.ylabel("Loss")
-        plt.xlabel("Epoch")
-        plt.legend(["Train", "Test"], loc="upper left")
-        plt.show()
-
-    def predict(self, test_data):
-        return self.model.predict(test_data)
 
     def build_autoencoders(self, isConv):
         if isConv:
