@@ -17,5 +17,9 @@ install the requirements
 ```
 pip install -r requirements.txt
 ```
+compile the library
+```
+python setup.py sdist
+```
 
 # MEF ( Multi-Exposure image Fusion )
