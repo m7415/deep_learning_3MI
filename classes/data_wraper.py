@@ -5,61 +5,70 @@ import matplotlib.pyplot as plt
 
 class Dataset:
     def __init__(self, file_paths):
-        self.nb_data = 0
-        self.files = []
-        for file_path in file_paths:
-            file = loadmat(file_path)
-            self.files.append(file)
-            self.nb_data += len(file['Map1_outForCeline'][0])
+        self.file_paths = file_paths
 
-        self.map1_list = np.zeros((self.nb_data, 512, 512))
-        self.coeff1_list = np.zeros((self.nb_data))
-        self.mask1_list = np.zeros((self.nb_data, 512, 512))
+        self.map1_list = np.zeros((0, 512, 512))
+        self.coeff1_list = np.zeros((0))
+        self.mask1_list = np.zeros((0, 512, 512))
 
-        self.map2_list = np.zeros((self.nb_data, 512, 512))
-        self.coeff2_list = np.zeros((self.nb_data))
-        self.mask2_list = np.zeros((self.nb_data, 512, 512))
+        self.map2_list = np.zeros((0, 512, 512))
+        self.coeff2_list = np.zeros((0))
+        self.mask2_list = np.zeros((0, 512, 512))
 
-        self.map3_list = np.zeros((self.nb_data, 512, 512))
-        self.coeff3_list = np.zeros((self.nb_data))
-        self.mask3_list = np.zeros((self.nb_data, 512, 512))
+        self.map3_list = np.zeros((0, 512, 512))
+        self.coeff3_list = np.zeros((0))
+        self.mask3_list = np.zeros((0, 512, 512))
 
-        self.combined_list = np.zeros((self.nb_data, 512, 512))
-        self.azimut_list = np.zeros((self.nb_data))
+        self.combined_list = np.zeros((0, 512, 512))
+        self.azimut_list = np.zeros((0))
 
-        self.add_data()
-
-        self.files = []
+        for file_path in self.file_paths:
+            self.add_data(file_path)
                 
         self.apply_coeff()
     
-    def add_data(self):
-        i = 0
-        for file in self.files:
-            map1 = file['Map1_outForCeline'][0]
-            coeff1 = file['coef1_outForCeline'][0]
-            mask1 = file['mask1_outForceline'][0]
-            map2 = file['Map2_outForCeline'][0]
-            coeff2 = file['coef2_outForCeline'][0]
-            mask2 = file['mask2_outForceline'][0]
-            map3 = file['Map3_outForCeline'][0]
-            coeff3 = file['coef3_outForCeline'][0]
-            mask3 = file['mask3_outForceline'][0]
-            combined = file['Acombine_outForCeline'][0]
-            azimut = file['OUT_Fa_celine'][0]
-            for j in range(len(file['Map1_outForCeline'][0])):
-                self.map1_list[i] = map1[j]
-                self.coeff1_list[i] = coeff1[j]
-                self.mask1_list[i] = mask1[j]
-                self.map2_list[i] = map2[j]
-                self.coeff2_list[i] = coeff2[j]
-                self.mask2_list[i] = mask2[j]
-                self.map3_list[i] = map3[j]
-                self.coeff3_list[i] = coeff3[j]
-                self.mask3_list[i] = mask3[j]
-                self.combined_list[i] = combined[j]
-                self.azimut_list[i] = azimut[j]
-                i += 1
+    def add_data(self, file_path):
+        file = loadmat(file_path)
+        old_lenght = len(self.map1_list)
+        new_lenght = old_lenght + len(file['Map1_outForCeline'][0])
+
+        # extend the length of the lists
+        self.map1_list = np.resize(self.map1_list, (new_lenght, 512, 512))
+        self.coeff1_list = np.resize(self.coeff1_list, (new_lenght))
+        self.mask1_list = np.resize(self.mask1_list, (new_lenght, 512, 512))
+
+        self.map2_list = np.resize(self.map2_list, (new_lenght, 512, 512))
+        self.coeff2_list = np.resize(self.coeff2_list, (new_lenght))
+        self.mask2_list = np.resize(self.mask2_list, (new_lenght, 512, 512))
+
+        self.map3_list = np.resize(self.map3_list, (new_lenght, 512, 512))
+        self.coeff3_list = np.resize(self.coeff3_list, (new_lenght))
+        self.mask3_list = np.resize(self.mask3_list, (new_lenght, 512, 512))
+
+        self.combined_list = np.resize(self.combined_list, (new_lenght, 512, 512))
+        self.azimut_list = np.resize(self.azimut_list, (new_lenght))
+
+        # add the data
+        for i in range(old_lenght, new_lenght):
+            self.map1_list[i] = file['Map1_outForCeline'][0][i - old_lenght]
+            self.coeff1_list[i] = file['coef1_outForCeline'][0][i - old_lenght]
+            self.mask1_list[i] = file['mask1_outForceline'][0][i - old_lenght]
+
+            self.map2_list[i] = file['Map2_outForCeline'][0][i - old_lenght]
+            self.coeff2_list[i] = file['coef2_outForCeline'][0][i - old_lenght]
+            self.mask2_list[i] = file['mask2_outForceline'][0][i - old_lenght]
+
+            self.map3_list[i] = file['Map3_outForCeline'][0][i - old_lenght]
+            self.coeff3_list[i] = file['coef3_outForCeline'][0][i - old_lenght]
+            self.mask3_list[i] = file['mask3_outForceline'][0][i - old_lenght]
+
+            self.combined_list[i] = file['Acombine_outForCeline'][0][i - old_lenght]
+            self.azimut_list[i] = file['OUT_Fa_celine'][0][i - old_lenght]
+
+
+        print('Added data from ' + file_path)
+        print('New lenght: ' + str(new_lenght))
+        
     
     def apply_coeff(self):
         self.map1_list = self.map1_list * self.coeff1_list[:, None, None]
