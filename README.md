@@ -1,25 +1,33 @@
 # CSL_3MI_ML
+
+## Description
 Experimentations on the use of ML in stray light correction on the case of the 3MI
 
-create a virtual environment with python 3.6.9
+## TODO
+
+- [ ] change data_wraper to lighten the memory usage
+- [ ] do a grid search on the experiment parameters
+- [ ] only load clean data (not 9a)
+- [ ] save the results of the grid search (.csv) in google drive
+
+## Installation
+
+### create a virtual environment with python 3.6.9
 ```
 python3 -m venv venv
 ```
-activate the virtual environment (linux)
+
+### activate the virtual environment (linux)
 ```
 source venv/bin/activate
 ```
-activate the virtual environment (windows)
+
+### activate the virtual environment (windows)
 ```
-./venv/Scripts/activate.bat
+source venv/Scripts/activate
 ```
-install the requirements
+
+### install the requirements
 ```
 pip install -r requirements.txt
 ```
-compile the library
-```
-python setup.py sdist
-```
-
-# MEF ( Multi-Exposure image Fusion )
