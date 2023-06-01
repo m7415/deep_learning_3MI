@@ -308,13 +308,14 @@ class UNet(ModelPackage):
             file.close()
         with open(csv_path, 'a+', newline='') as file:
             writer = csv.writer(file)
-            reader = csv.reader(file)
-            last_experiment_number = 0
-            for row in reader:
-                last_experiment_number = row[0]
+            if len(pd.read_csv('unet.csv')) == 0:
+                number = 1
+            else:
+                last_experiment_number = pd.read_csv('unet.csv').iloc[-1]['Experiment number']
+                number = int(last_experiment_number) + 1
             optimizer_name = self.optimizer.__class__.__name__
             loss_name = self.loss.__class__.__name__
-            writer.writerow([int(last_experiment_number) + 1, name, datetime.datetime.now(), optimizer_name, loss_name, self.input_shape, self.output_shape, self.filters, self.dropout, self.history.params['epochs'], self.batch_size, self.evaluate(test_data, test_label, metric='ssim'), self.evaluate(test_data, test_label, metric='psnr'), self.evaluate(test_data, test_label, metric='mse')])    
+            writer.writerow([number, name, datetime.datetime.now(), optimizer_name, loss_name, self.input_shape, self.output_shape, self.filters, self.dropout, self.history.params['epochs'], self.batch_size, self.evaluate(test_data, test_label, metric='ssim'), self.evaluate(test_data, test_label, metric='psnr'), self.evaluate(test_data, test_label, metric='mse')])    
     
     def print_experiment_csv(self, csv_path):
         df = pd.read_csv('unet.csv')
