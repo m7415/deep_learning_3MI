@@ -4,3 +4,6 @@ venv/
 .vscode/
 *.png
 *copy*
+models/
+results/
+```

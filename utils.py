@@ -44,7 +44,9 @@ class ModelTemplate:
         return self.model.predict(test_data)
     
     def save_experiment_csv(self, test_data, test_label, csv_path, name):
-        # if  csv_path does not exist, create it and write the header
+        # if the results folder does not exist, create it
+        if not os.path.exists('results'):
+            os.makedirs('results')
         if not os.path.exists(csv_path):
             with open(csv_path, 'w', newline='') as file:
                 writer = csv.writer(file)
@@ -53,7 +55,8 @@ class ModelTemplate:
             file.close()
         with open(csv_path, 'a+', newline='') as file:
             writer = csv.writer(file)
-            if len(pd.read_csv('unet.csv')) == 0:
+            number = 0
+            if len(pd.read_csv(csv_path)) == 0:
                 number = 1
             else:
                 last_experiment_number = pd.read_csv('unet.csv').iloc[-1]['Experiment number']
