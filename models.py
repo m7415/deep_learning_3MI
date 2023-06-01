@@ -10,6 +10,10 @@ from keras.layers import Dense, Input, Conv2D, MaxPooling2D, UpSampling2D, conca
 from keras.optimizers import Adadelta
 from keras.losses import mean_squared_error
 import matplotlib.pyplot as plt
+import csv
+import datetime
+import os
+import pandas as pd
 
 class ModelPackage:
     def __init__(self, optimizer, loss):
@@ -24,6 +28,7 @@ class ModelPackage:
         self.model = keras.models.load_model(model_path)
 
     def train(self, train_data, train_label, epochs=10, batch_size=1):
+        self.batch_size = batch_size
         self.history = self.model.fit(
             train_data,
             train_label,
@@ -66,9 +71,10 @@ class UNet(ModelPackage):
         self.model = self.build_model()
         self.model.compile(optimizer=self.optimizer, loss=self.loss)
     
-    def summary(self, graph=True):
-        self.model.summary()
-        if graph:
+    def summary(self, graph=False, graph_name=None):
+        if not graph:
+            self.model.summary()
+        else:
             dot = pydot.Dot(graph_type="digraph", rankdir="UD")
             subdot = pydot.Subgraph(rank="same")
             node_dict = {}
@@ -211,8 +217,7 @@ class UNet(ModelPackage):
                 )
 
             # Save the graph
-            graph_path = "unet.png"
-            dot.write_png(graph_path)
+            graph_path = f"{graph_name}.png"
             print(f"U-shaped graph saved at: {graph_path}")
 
     def build_model(self):
@@ -293,21 +298,28 @@ class UNet(ModelPackage):
 
         return model
     
-    def print_experiment_report(self, test_data, test_label):
-        print(f"Optimizer: {self.optimizer}")
-        print(f"Loss: {self.loss}")
-        print(f"Input shape: {self.input_shape}")
-        print(f"Output shape: {self.output_shape}")
-        print(f"Filters: {self.filters}")
-        print(f"Dropout: {self.dropout}")
-        print(f"Epochs: {self.history.params['epochs']}")
-        print(f"Batch size: -")
-        print(f"Loss: {self.history.history['loss']}")
-        print(f"Validation loss: {self.history.history['val_loss']}")
-        print(f"Test SSIM: {self.evaluate(test_data, test_label, metric='ssim')}")
-        print(f"Test PSNR: {self.evaluate(test_data, test_label, metric='psnr')}")
-        print(f"Test MSE: {self.evaluate(test_data, test_label, metric='mse')}")
+    def save_experiment_csv(self, test_data, test_label, csv_path, name):
+        # if  csv_path does not exist, create it and write the header
+        if not os.path.exists(csv_path):
+            with open(csv_path, 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(["Experiment number", "Name", "Date", "Optimizer", "Loss", "Input shape", "Output shape", "Filters", "Dropout", "Epochs", "Batch size", "Test SSIM", "Test PSNR", "Test MSE"])
+            # close the file
+            file.close()
+        with open(csv_path, 'a+', newline='') as file:
+            writer = csv.writer(file)
+            reader = csv.reader(file)
+            last_experiment_number = 0
+            for row in reader:
+                last_experiment_number = row[0]
+            optimizer_name = self.optimizer.__class__.__name__
+            loss_name = self.loss.__class__.__name__
+            writer.writerow([int(last_experiment_number) + 1, name, datetime.datetime.now(), optimizer_name, loss_name, self.input_shape, self.output_shape, self.filters, self.dropout, self.history.params['epochs'], self.batch_size, self.evaluate(test_data, test_label, metric='ssim'), self.evaluate(test_data, test_label, metric='psnr'), self.evaluate(test_data, test_label, metric='mse')])    
     
+    def print_experiment_csv(self, csv_path):
+        df = pd.read_csv('unet.csv')
+        df.head(len(df))
+
     def evaluate(self, test_data, test_label, metric):
         pred_label = self.predict(test_data)
         pred_label = pred_label.reshape(test_label.shape[0], test_label.shape[1], test_label.shape[2])
