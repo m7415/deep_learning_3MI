@@ -1,2 +1,3 @@
 Experiment number,Name,Date,Optimizer,Loss,Input shape,Output shape,Filters,Dropout,Epochs,Batch size,Test SSIM,Test PSNR,Test MSE
 1,dummy,2023-06-01 11:57:43.447290,Adam,MeanSquaredError,"(100, 100, 3)","(100, 100, 1)","[32, 64]",0.5,1,32,0.82680434,27.75809,0.0016756792
+2,dummy,2023-06-01 12:04:45.868841,Adam,MeanSquaredError,"(100, 100, 3)","(100, 100, 1)","[32, 64]",0.5,1,32,0.82680434,27.75809,0.0016756792

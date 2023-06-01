@@ -1,58 +1,13 @@
 import tensorflow as tf
 from tensorflow import keras
-from keras import layers
 from keras.models import Model
-from keras.utils import vis_utils
-from keras.utils.vis_utils import model_to_dot
-import pydot
-from keras.utils import plot_model
 from keras.layers import Dense, Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate, Dropout
-from keras.optimizers import Adadelta
-from keras.losses import mean_squared_error
-import matplotlib.pyplot as plt
-import csv
-import datetime
-import os
-import pandas as pd
 
-class ModelPackage:
-    def __init__(self, optimizer, loss):
-        self.optimizer = optimizer
-        self.loss = loss
-        self.history = None
+import pydot
 
-    def save_model(self, model_path):
-        self.model.save(model_path)
+from utils import ModelTemplate
 
-    def load_model(self, model_path):
-        self.model = keras.models.load_model(model_path)
-
-    def train(self, train_data, train_label, epochs=10, batch_size=1):
-        self.batch_size = batch_size
-        self.history = self.model.fit(
-            train_data,
-            train_label,
-            epochs=epochs,
-            batch_size=batch_size,
-            validation_split=0.1,
-            shuffle=True,
-        )
-
-    def plot_loss(self):
-        plt.plot(self.history.history["loss"])
-        plt.plot(self.history.history["val_loss"])
-        plt.title("Model Loss")
-        plt.ylabel("Loss")
-        plt.xlabel("Epoch")
-        plt.legend(["Train", "Validation"], loc="upper left")
-        plt.show()
-
-    def predict(self, test_data):
-        return self.model.predict(test_data)
-
-# define the UNet class, which inherits from the Model class
-
-class UNet(ModelPackage):
+class UNet(ModelTemplate):
     def __init__(
         self,
         input_shape,
@@ -62,9 +17,8 @@ class UNet(ModelPackage):
         optimizer="adam",
         loss="mean_squared_error",
     ):
-        super().__init__(optimizer, loss)
-        self.input_shape = input_shape
-        self.output_shape = output_shape
+        super().__init__(input_shape, output_shape, optimizer, loss)
+
         self.filters = filters
         self.dropout = dropout
 
@@ -298,137 +252,3 @@ class UNet(ModelPackage):
 
         return model
     
-    def save_experiment_csv(self, test_data, test_label, csv_path, name):
-        # if  csv_path does not exist, create it and write the header
-        if not os.path.exists(csv_path):
-            with open(csv_path, 'w', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(["Experiment number", "Name", "Date", "Optimizer", "Loss", "Input shape", "Output shape", "Filters", "Dropout", "Epochs", "Batch size", "Test SSIM", "Test PSNR", "Test MSE"])
-            # close the file
-            file.close()
-        with open(csv_path, 'a+', newline='') as file:
-            writer = csv.writer(file)
-            if len(pd.read_csv('unet.csv')) == 0:
-                number = 1
-            else:
-                last_experiment_number = pd.read_csv('unet.csv').iloc[-1]['Experiment number']
-                number = int(last_experiment_number) + 1
-            optimizer_name = self.optimizer.__class__.__name__
-            loss_name = self.loss.__class__.__name__
-            writer.writerow([number, name, datetime.datetime.now(), optimizer_name, loss_name, self.input_shape, self.output_shape, self.filters, self.dropout, self.history.params['epochs'], self.batch_size, self.evaluate(test_data, test_label, metric='ssim'), self.evaluate(test_data, test_label, metric='psnr'), self.evaluate(test_data, test_label, metric='mse')])    
-    
-    def print_experiment_csv(self, csv_path):
-        df = pd.read_csv('unet.csv')
-        df.head(len(df))
-
-    def evaluate(self, test_data, test_label, metric):
-        pred_label = self.predict(test_data)
-        pred_label = pred_label.reshape(test_label.shape[0], test_label.shape[1], test_label.shape[2])
-        # convert to double tensor
-        pred_label = tf.convert_to_tensor(pred_label, dtype=tf.float32)
-        test_label = tf.convert_to_tensor(test_label, dtype=tf.float32)
-        if metric == "ssim":
-            return tf.reduce_mean(
-                tf.image.ssim(
-                    test_label, pred_label, max_val=1.0, filter_size=11
-                )
-            ).numpy()
-        elif metric == "psnr":
-            return tf.reduce_mean(
-                tf.image.psnr(test_label, pred_label, max_val=1.0)
-            ).numpy()
-        elif metric == "mse":
-            return tf.reduce_mean(
-                tf.keras.losses.mean_squared_error(
-                    test_label, pred_label
-                )
-            ).numpy()
-        else:
-            raise ValueError("Invalid metric")
-        
-
-
-class Autoencoder(ModelPackage):
-    def __init__(
-        self,
-        input_shape,
-        isConv=False,
-        hidden_units=None,
-        filters=None,
-        optimizer="adadelta",
-        loss="mean_squared_error",
-    ):
-        self.input_shape = input_shape
-        self.output_shape = input_shape
-        self.hidden_units = hidden_units
-        self.filters = filters
-
-        super().__init__(optimizer, loss)
-
-        self.model, self.encoder, self.decoder = self.build_autoencoders(isConv)
-
-        self.model.compile(optimizer=self.optimizer, loss=self.loss)
-
-    def summary(self, graph=False):
-        self.model.summary()
-        if graph:
-            keras.utils.plot_model(
-                self.model, to_file="autoencoder.png", show_shapes=True
-            )
-
-    def build_autoencoders(self, isConv):
-        if isConv:
-            return self.build_autoencoders_conv()
-        else:
-            return self.build_autoencoders_flat()
-
-    def build_autoencoders_flat(self):
-        input_layer = Input(shape=(self.input_shape,))
-
-        for i, units in enumerate(self.hidden_units):
-            if i == 0:
-                layer = Dense(units, activation="relu")(input_layer)
-            else:
-                layer = Dense(units, activation="relu")(layer)
-
-        middle_layer = layer
-
-        for i, units in enumerate(self.hidden_units[::-1]):
-            layer = Dense(units, activation="relu")(layer)
-
-        decoded = Dense(self.output_shape, activation="sigmoid")(layer)
-
-        ae_model = Model(inputs=input_layer, outputs=decoded)
-        encoder_model = Model(inputs=input_layer, outputs=middle_layer)
-        decoder_model = Model(inputs=middle_layer, outputs=decoded)
-
-        return ae_model, encoder_model, decoder_model
-
-    def build_autoencoders_conv(self):
-        input_layer = Input(shape=self.input_shape)
-
-        for i, filters in enumerate(self.filters):
-            if i == 0:
-                layer = Conv2D(filters, (3, 3), activation="relu", padding="same")(
-                    input_layer
-                )
-                layer = MaxPooling2D((2, 2), padding="same")(layer)
-            else:
-                layer = Conv2D(filters, (3, 3), activation="relu", padding="same")(
-                    layer
-                )
-                layer = MaxPooling2D((2, 2), padding="same")(layer)
-
-        middle_layer = layer
-
-        for i, filters in enumerate(self.filters[::-1]):
-            layer = UpSampling2D((2, 2))(layer)
-            layer = Conv2D(filters, (3, 3), activation="relu", padding="same")(layer)
-
-        decoded = Conv2D(1, (3, 3), activation="sigmoid", padding="same")(layer)
-
-        ae_model = Model(inputs=input_layer, outputs=decoded)
-        encoder_model = Model(inputs=input_layer, outputs=middle_layer)
-        decoder_model = Model(inputs=middle_layer, outputs=decoded)
-
-        return ae_model, encoder_model, decoder_model
