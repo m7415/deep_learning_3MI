@@ -43,14 +43,14 @@ class ModelTemplate:
     def predict(self, test_data):
         return self.model.predict(test_data)
     
-    def save_experiment_csv(self, test_data, test_label, csv_path, name):
+    def save_experiment_csv(self, test_data, test_label, csv_path, name, learning_rate):
         # if the results folder does not exist, create it
         if not os.path.exists('results'):
             os.makedirs('results')
         if not os.path.exists(csv_path):
             with open(csv_path, 'w', newline='') as file:
                 writer = csv.writer(file)
-                writer.writerow(["Experiment number", "Name", "Date", "Optimizer", "Loss", "Input shape", "Output shape", "Filters", "Dropout", "Epochs", "Batch size", "Test SSIM", "Test PSNR", "Test MSE"])
+                writer.writerow(["Experiment number", "Name", "Date", "Optimizer", "Learning rate", "Loss", "Input shape", "Output shape", "Filters", "Dropout", "Epochs", "Batch size", "Test SSIM", "Test PSNR", "Test MSE"])
             # close the file
             file.close()
         with open(csv_path, 'a+', newline='') as file:
@@ -59,11 +59,11 @@ class ModelTemplate:
             if len(pd.read_csv(csv_path)) == 0:
                 number = 1
             else:
-                last_experiment_number = pd.read_csv('unet.csv').iloc[-1]['Experiment number']
+                last_experiment_number = pd.read_csv(csv_path).iloc[-1]['Experiment number']
                 number = int(last_experiment_number) + 1
             optimizer_name = self.optimizer.__class__.__name__
             loss_name = self.loss.__class__.__name__
-            writer.writerow([number, name, datetime.datetime.now(), optimizer_name, loss_name, self.input_shape, self.output_shape, self.filters, self.dropout, self.history.params['epochs'], self.batch_size, self.evaluate(test_data, test_label, metric='ssim'), self.evaluate(test_data, test_label, metric='psnr'), self.evaluate(test_data, test_label, metric='mse')])    
+            writer.writerow([number, name, datetime.datetime.now(), optimizer_name, learning_rate, loss_name, self.input_shape, self.output_shape, self.filters, self.dropout, self.history.params['epochs'], self.batch_size, self.evaluate(test_data, test_label, metric='ssim'), self.evaluate(test_data, test_label, metric='psnr'), self.evaluate(test_data, test_label, metric='mse')])    
         file.close()
 
     def evaluate(self, test_data, test_label, metric):

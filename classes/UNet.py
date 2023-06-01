@@ -37,15 +37,17 @@ class UNet(ModelTemplate):
             expansive_path_names = ["output"]
 
             for i in range(len(self.filters)):
-                contractive_path_names.append(f"conv_up_1_{i+1}")
-                contractive_path_names.append(f"conv_up_2_{i+1}")
+                contractive_path_names.append(f"conv_down_1_{i+1}")
+                contractive_path_names.append(f"conv_down_2_{i+1}")
                 contractive_path_names.append(f"pool_{i+1}")
-                expansive_path_names.append(f"conv_down_1_{i+1}")
-                expansive_path_names.append(f"conv_down_2_{i+1}")
+                expansive_path_names.append(f"conv_up_1_{i+1}")
+                expansive_path_names.append(f"conv_up_2_{i+1}")
                 expansive_path_names.append(f"up_{i+1}")
 
             for i, layer in enumerate(self.model.layers):
-                if not isinstance(layer, tf.keras.layers.Concatenate):
+                if not isinstance(layer, tf.keras.layers.Concatenate) and not isinstance(
+                    layer, tf.keras.layers.Dropout
+                ):
                     node = pydot.Node(
                         layer.name,
                         label=f"{layer.name}\n-----------------\n{layer.output_shape}",
@@ -78,7 +80,7 @@ class UNet(ModelTemplate):
             input_layer = self.model.get_layer("input")
 
             for i in range(len(self.filters) - 1):
-                conv_layer_1 = self.model.get_layer(f"conv_up_1_{i+1}")
+                conv_layer_1 = self.model.get_layer(f"conv_down_1_{i+1}")
                 if i == 0:
                     edge = pydot.Edge(
                         node_dict[input_layer.name], node_dict[conv_layer_1.name]
@@ -88,7 +90,7 @@ class UNet(ModelTemplate):
                         node_dict[pool_layer.name], node_dict[conv_layer_1.name]
                     )
                 dot.add_edge(edge)
-                conv_layer_2 = self.model.get_layer(f"conv_up_2_{i+1}")
+                conv_layer_2 = self.model.get_layer(f"conv_down_2_{i+1}")
                 dot.add_edge(
                     pydot.Edge(
                         node_dict[conv_layer_1.name], node_dict[conv_layer_2.name]
@@ -133,7 +135,7 @@ class UNet(ModelTemplate):
                         dir="back",
                     )
                 dot.add_edge(edge)
-                conv_layer_1 = self.model.get_layer(f"conv_down_1_{i}")
+                conv_layer_1 = self.model.get_layer(f"conv_up_1_{i}")
                 dot.add_edge(
                     pydot.Edge(
                         node_dict[conv_layer_1.name],
@@ -141,7 +143,7 @@ class UNet(ModelTemplate):
                         dir="back",
                     )
                 )
-                conv_layer_2 = self.model.get_layer(f"conv_down_2_{i}")
+                conv_layer_2 = self.model.get_layer(f"conv_up_2_{i}")
                 dot.add_edge(
                     pydot.Edge(
                         node_dict[conv_layer_2.name],
@@ -160,8 +162,8 @@ class UNet(ModelTemplate):
 
             # add the skip connections
             for i in range(len(self.filters) - 1):
-                start_layer = self.model.get_layer(f"conv_up_2_{i+1}")
-                end_layer = self.model.get_layer(f"conv_down_1_{len(self.filters)-i-1}")
+                start_layer = self.model.get_layer(f"conv_down_2_{i+1}")
+                end_layer = self.model.get_layer(f"conv_up_1_{len(self.filters)-i-1}")
                 dot.add_edge(
                     pydot.Edge(
                         node_dict[start_layer.name],
@@ -172,6 +174,7 @@ class UNet(ModelTemplate):
 
             # Save the graph
             graph_path = f"{graph_name}.png"
+            dot.write_png(graph_path)
             print(f"U-shaped graph saved at: {graph_path}")
 
     def build_model(self):

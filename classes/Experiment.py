@@ -10,10 +10,11 @@ from UNet import UNet
 from AE import Autoencoder
 
 class Experiment:
-    def __init__(self, model_name, name, optimizer, loss, input_shape, output_shape, filters, dropout, epochs, batch_size):
+    def __init__(self, model_name, name, optimizer, learning_rate, loss, input_shape, output_shape, filters, dropout, epochs, batch_size):
         self.model_name = model_name
         self.name = name
         self.optimizer = optimizer
+        self.learning_rate = learning_rate
         self.loss = loss
         self.input_shape = input_shape
         self.output_shape = output_shape
@@ -38,7 +39,7 @@ class Experiment:
         model_save_path = os.path.join("models", self.name)
         if save_model:
             self.model.save_model(model_save_path)
-        self.model.save_experiment_csv(test_data, test_label, self.csv_path, self.name)
+        self.model.save_experiment_csv(test_data, test_label, self.csv_path, self.name, self.learning_rate)
     
     def get_model(self):
         return self.model
