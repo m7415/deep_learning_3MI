@@ -7,8 +7,6 @@ Experimentations on the use of ML in stray light correction on the case of the 3
 
 - [ ] change data_wraper to lighten the memory usage
 - [ ] do a grid search on the experiment parameters
-- [ ] only load clean data (not 9a)
-- [ ] save the results of the grid search (.csv) in google drive
 
 ## Installation
 

@@ -10,7 +10,7 @@ from UNet import UNet
 from AE import Autoencoder
 
 class Experiment:
-    def __init__(self, model_name, name, optimizer, learning_rate, loss, input_shape, output_shape, filters, dropout, epochs, batch_size):
+    def __init__(self, model_name, name, optimizer, learning_rate, loss, input_shape, output_shape, filters, dropout, epochs, batch_size, csv_path):
         self.model_name = model_name
         self.name = name
         self.optimizer = optimizer
@@ -32,7 +32,7 @@ class Experiment:
         else:
             raise Exception("Model name is not defined")
         
-        self.csv_path = os.path.join("results", self.model_name + ".csv")
+        self.csv_path = csv_path
         
     def make(self, train_data, train_label, test_data, test_label, save_model=False):
         self.model.train(train_data, train_label, self.epochs, self.batch_size)

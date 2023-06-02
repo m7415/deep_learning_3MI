@@ -5,6 +5,20 @@ import csv
 import datetime
 import os
 import pandas as pd
+import numpy as np
+
+def plot_map(map):
+    plt.imshow(map, cmap='jet')
+    plt.colorbar()
+    plt.show()
+
+def plot_radial_profile(maps, azimut):
+    for map in maps:
+        image = map
+        center = int(image.shape[0] / 2)
+        image = np.rot90(image, k=azimut)[center, :]
+        plt.plot(image)
+    plt.show()
 
 class ModelTemplate:
     def __init__(self, input_shape, output_shape, optimizer, loss):
