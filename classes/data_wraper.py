@@ -118,11 +118,10 @@ class Dataset:
         self.combined_list = combined_list_cropped
 
     def get_center(self, i):
-        mask = self.mask3_list[i]
-        center = np.array([0, 0])
-        center[0] = np.sum(mask, axis=1).argmax()
-        center[1] = np.sum(mask, axis=0).argmax()
-        return center
+        map = self.map1_list[i]
+        max_value = np.max(map)
+        max_index = np.where(map == max_value)
+        return max_index[0][0], max_index[1][0]
 
     def crop_map(self, image, box, crop_size):
         image = image[box[0]:box[2], box[1]:box[3]]
