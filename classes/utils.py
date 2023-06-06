@@ -6,6 +6,7 @@ import datetime
 import os
 import pandas as pd
 import numpy as np
+from scipy.ndimage import rotate
 
 def plot_map(map):
     plt.imshow(map, cmap='jet')
@@ -14,10 +15,12 @@ def plot_map(map):
 
 def plot_radial_profile(maps, azimut):
     for map in maps:
-        image = map
-        center = int(image.shape[0] / 2)
-        image = np.rot90(image, k=azimut)[center, :]
-        plt.plot(image)
+        angle = azimut + 90
+        map_rot = rotate(map, angle, reshape=False)
+        map_rot = np.abs(map_rot)
+        map_rot[map_rot == 0] = np.min(map_rot[map_rot != 0])
+        radial_profile = map_rot[map_rot.shape[0]//2, :]
+        plt.plot(radial_profile)
     plt.show()
 
 class ModelTemplate:
@@ -36,15 +39,28 @@ class ModelTemplate:
     
     def train(self, train_data, train_label, epochs=10, batch_size=1):
         self.batch_size = batch_size
-        self.history = self.model.fit(
-            train_data,
-            train_label,
-            epochs=epochs,
-            batch_size=batch_size,
-            validation_split=0.1,
-            shuffle=True,
-            verbose=0,
-        )
+        # record history, allowing for consecutive training
+        if self.history is None:
+            self.history = self.model.fit(
+                train_data,
+                train_label,
+                epochs=epochs,
+                batch_size=batch_size,
+                validation_split=0.1,
+                shuffle=True,
+                verbose=1,
+            )
+        else:
+            self.history = self.model.fit(
+                train_data,
+                train_label,
+                epochs=epochs,
+                batch_size=batch_size,
+                validation_split=0.1,
+                shuffle=True,
+                verbose=1,
+                initial_epoch=self.history.epoch[-1],
+            )
 
     def plot_loss(self):
         plt.plot(self.history.history["loss"])

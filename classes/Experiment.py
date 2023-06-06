@@ -6,8 +6,8 @@ import datetime
 import os
 import pandas as pd
 
-from UNet import UNet
-from AE import Autoencoder
+from .UNet import UNet
+from .AE import Autoencoder
 
 class Experiment:
     def __init__(self, model_name, name, optimizer, learning_rate, loss, input_shape, output_shape, filters, dropout, epochs, batch_size, csv_path):
@@ -25,10 +25,14 @@ class Experiment:
 
         self.model = None
 
+        if isinstance(self.loss, list):
+            loss = self.loss[0]
+        else:
+            loss = self.loss
         if model_name == "UNet":
             self.model = UNet(input_shape, output_shape, filters, dropout, optimizer, loss)
         elif model_name == "AE":
-            self.model = Autoencoder(input_shape, optimizer=optimizer, loss=loss)
+            self.model = Autoencoder(input_shape, optimizer, loss)
         else:
             raise Exception("Model name is not defined")
         
@@ -39,7 +43,13 @@ class Experiment:
         self.test_mse = None
         
     def make(self, train_data, train_label, test_data, test_label, save_model=False):
-        self.model.train(train_data, train_label, self.epochs, self.batch_size)
+        # handle multi loss training
+        if isinstance(self.loss, list):
+            for loss, epoch in zip(self.loss, self.epochs):
+                self.model.model.compile(optimizer=self.optimizer, loss=loss)
+                self.model.train(train_data, train_label, epoch, self.batch_size)
+        else:
+            self.model.train(train_data, train_label, self.epochs, self.batch_size)
         model_save_path = os.path.join("models", self.name)
         if save_model:
             self.model.save_model(model_save_path)

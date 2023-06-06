@@ -5,7 +5,7 @@ from keras.layers import Dense, Input, Conv2D, MaxPooling2D, UpSampling2D, conca
 
 import pydot
 
-from utils import ModelTemplate
+from .utils import ModelTemplate
 
 class UNet(ModelTemplate):
     def __init__(

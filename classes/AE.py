@@ -3,7 +3,7 @@ from tensorflow import keras
 from keras.models import Model
 from keras.layers import Dense, Input, Conv2D, MaxPooling2D, UpSampling2D
 
-from utils import ModelTemplate
+from .utils import ModelTemplate
 
 class Autoencoder(ModelTemplate):
     def __init__(
