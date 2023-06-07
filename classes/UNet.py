@@ -10,13 +10,25 @@ from .utils import ModelTemplate
 class UNet(ModelTemplate):
     def __init__(
         self,
-        input_shape,
-        output_shape,
-        filters,
+        input_shape = (512, 512, 1),
+        output_shape = (512, 512, 1),
+        filters = [64, 128, 256],
         dropout=0.2,
         optimizer="adam",
         loss="mean_squared_error",
+        model_path=None,
     ):
+        if model_path is not None:
+            self.model = keras.models.load_model(model_path)
+            super().__init__(
+                self.model.input_shape,
+                self.model.output_shape,
+                self.model.optimizer,
+                self.model.loss,
+            )
+            print(f"Loaded model from {model_path}")
+            return
+
         super().__init__(input_shape, output_shape, optimizer, loss)
 
         self.filters = filters

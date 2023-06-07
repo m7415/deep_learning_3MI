@@ -13,12 +13,14 @@ def plot_map(map):
     plt.colorbar()
     plt.show()
 
+def apply_mask(map, mask):
+    return np.multiply(map, mask)
+
 def plot_radial_profile(maps, azimut):
     for map in maps:
         angle = azimut + 90
-        map_rot = rotate(map, angle, reshape=False)
-        map_rot = np.abs(map_rot)
-        map_rot[map_rot == 0] = np.min(map_rot[map_rot != 0])
+        map_rot = rotate(map, angle, reshape=False, order=0)
+        #map_rot = np.abs(map_rot)
         radial_profile = map_rot[map_rot.shape[0]//2, :]
         plt.plot(radial_profile)
     plt.show()
@@ -30,12 +32,9 @@ class ModelTemplate:
         self.optimizer = optimizer
         self.loss = loss
         self.history = None
-
+    
     def save_model(self, model_path):
-        self.model.save(model_path)
-
-    def load_model(self, model_path):
-        self.model = keras.models.load_model(model_path)
+        tf.keras.saving.save_model(self.model, model_path, overwrite=True, save_format="tf")
     
     def train(self, train_data, train_label, epochs=10, batch_size=1):
         self.batch_size = batch_size
