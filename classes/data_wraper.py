@@ -4,9 +4,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 class Dataset:
-    def __init__(self, file_paths, save_maps=False):
+    def __init__(self, file_paths):
         self.file_paths = file_paths
-        self.save_maps = save_maps
 
         self.map1_list = np.zeros((0, 512, 512))
         self.coeff1_list = np.zeros((0))
@@ -33,16 +32,13 @@ class Dataset:
 
         for file_path in self.file_paths:
             self.add_data(file_path)
-                
-        self.apply_coeff()
 
         self.min_max_values = np.zeros((len(self.map1_list),2))
 
-        if self.save_maps:
-            self.map1_list_sv = self.map1_list.copy()
-            self.map2_list_sv = self.map2_list.copy()
-            self.map3_list_sv = self.map3_list.copy()
-            self.combined_list_sv = self.combined_list.copy()
+        self.map1_list_sv = self.map1_list.copy()
+        self.map2_list_sv = self.map2_list.copy()
+        self.map3_list_sv = self.map3_list.copy()
+        self.combined_list_sv = self.combined_list.copy()
     
     def add_data(self, file_path):
         file = loadmat(file_path)
@@ -67,6 +63,7 @@ class Dataset:
         self.elevation_list = np.resize(self.elevation_list, (new_lenght))
 
         # add the data
+        outlier_index = []
         for i in range(old_lenght, new_lenght):
             self.map1_list[i] = file['Map1_outForCeline'][0][i - old_lenght]
             self.coeff1_list[i] = file['coef1_outForCeline'][0][i - old_lenght]
@@ -80,19 +77,51 @@ class Dataset:
             self.coeff3_list[i] = file['coef3_outForCeline'][0][i - old_lenght]
             self.mask3_list[i] = file['mask3_outForceline'][0][i - old_lenght]
 
-            self.combined_list[i] = file['Acombine_outForCeline'][0][i - old_lenght]
+            self.apply_coeff(i)
+
+            self.combined_list[i] = self.compute_combined(i)
+            #file['Acombine_outForCeline'][0][i - old_lenght]
             self.azimut_list[i] = file['OUT_Fa_celine'][0][i - old_lenght]
             self.elevation_list[i] = file['OUT_Fb_celine'][0][i - old_lenght]
 
+            """ _, _, sl = self.compute_stray_light(self.combined_list[i])
+            if sl > 1:
+                outlier_index.append(i) """
+            if np.max(self.mask1_list[i]) == 1.0:
+                outlier_index.append(i)
+        
+        self.map1_list = np.delete(self.map1_list, outlier_index, axis=0)
+        self.coeff1_list = np.delete(self.coeff1_list, outlier_index, axis=0)
+        self.mask1_list = np.delete(self.mask1_list, outlier_index, axis=0)
+
+        self.map2_list = np.delete(self.map2_list, outlier_index, axis=0)
+        self.coeff2_list = np.delete(self.coeff2_list, outlier_index, axis=0)
+        self.mask2_list = np.delete(self.mask2_list, outlier_index, axis=0)
+
+        self.map3_list = np.delete(self.map3_list, outlier_index, axis=0)
+        self.coeff3_list = np.delete(self.coeff3_list, outlier_index, axis=0)
+        self.mask3_list = np.delete(self.mask3_list, outlier_index, axis=0)
+
+        self.combined_list = np.delete(self.combined_list, outlier_index, axis=0)
+        self.azimut_list = np.delete(self.azimut_list, outlier_index, axis=0)
+        self.elevation_list = np.delete(self.elevation_list, outlier_index, axis=0)
+
+        new_lenght = len(self.map1_list)
 
         print('Added data from ' + file_path)
         print('New lenght: ' + str(new_lenght))
         
     
-    def apply_coeff(self):
-        self.map1_list = self.map1_list * self.coeff1_list[:, None, None]
-        self.map2_list = self.map2_list * self.coeff2_list[:, None, None]
-        self.map3_list = self.map3_list * self.coeff3_list[:, None, None]
+    def apply_coeff(self, i):
+        self.map1_list[i] = self.map1_list[i] * self.coeff1_list[i]
+        self.map2_list[i] = self.map2_list[i] * self.coeff2_list[i]
+        self.map3_list[i] = self.map3_list[i] * self.coeff3_list[i]
+    
+    def compute_combined(self, i):
+        map3 = self.map3_list[i] * (1 - self.mask3_list[i])
+        map2 = self.map2_list[i] * (1 - self.mask2_list[i]) * self.mask3_list[i]
+        map1 = self.map1_list[i] * (1 - self.mask1_list[i]) * self.mask2_list[i] * self.mask3_list[i]
+        return map1 + map2 + map3
 
     def preprocess_data(self):
         def pretreatment(x):
@@ -114,12 +143,6 @@ class Dataset:
             self.map3_list[i] = (self.map3_list[i] - min_val) / (max_val - min_val)
             self.combined_list[i] = (self.combined_list[i] - min_val) / (max_val - min_val)
 
-        if self.save_maps:
-            self.map1_list_sv = self.map1_list.copy()
-            self.map2_list_sv = self.map2_list.copy()
-            self.map3_list_sv = self.map3_list.copy()
-            self.combined_list_sv = self.combined_list.copy()
-
     def rev_preprocess(self, map, i):
         min_val, max_val = self.min_max_values[i]
         map = map * (max_val - min_val) + min_val
@@ -127,12 +150,13 @@ class Dataset:
         return map
     
     def embed_map(self, pred, i):
-        map1 = self.map1_list_sv[i]
-        x, y = self.get_center(map1)
+        pred = self.rev_preprocess(pred, i)
+        x, y = self.get_center(self.map1_list_sv[i])
         box = np.array([x - self.crop_size / 2, y - self.crop_size / 2, x + self.crop_size / 2, y + self.crop_size / 2])
         box = box.astype(int)
         box = np.clip(box, 0, 512)
-        pred_fused = pred * self.mask3_list[i] + self.map3_list[i] * (1 - self.mask3_list[i])
+        map3_cropped = self.crop_map(self.map3_list_sv[i], box, self.crop_size)
+        pred_fused = pred * self.mask3_list[i] + map3_cropped * (1 - self.mask3_list[i])
         map = self.map3_list_sv[i]
         map[box[0]:box[2], box[1]:box[3]] = pred_fused[0:(box[2] - box[0]), 0:(box[3] - box[1])]
         return map
