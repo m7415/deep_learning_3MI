@@ -22,16 +22,21 @@ class Dataset:
 
         self.combined_list = np.zeros((0, 512, 512))
         self.azimut_list = np.zeros((0))
+        self.elevation_list = np.zeros((0))
 
         self.map1_list_sv = None
         self.map2_list_sv = None
         self.map3_list_sv = None
         self.combined_list_sv = None
 
+        self.crop_size = None
+
         for file_path in self.file_paths:
             self.add_data(file_path)
                 
         self.apply_coeff()
+
+        self.min_max_values = np.zeros((len(self.map1_list),2))
 
         if self.save_maps:
             self.map1_list_sv = self.map1_list.copy()
@@ -59,6 +64,7 @@ class Dataset:
 
         self.combined_list = np.resize(self.combined_list, (new_lenght, 512, 512))
         self.azimut_list = np.resize(self.azimut_list, (new_lenght))
+        self.elevation_list = np.resize(self.elevation_list, (new_lenght))
 
         # add the data
         for i in range(old_lenght, new_lenght):
@@ -76,6 +82,7 @@ class Dataset:
 
             self.combined_list[i] = file['Acombine_outForCeline'][0][i - old_lenght]
             self.azimut_list[i] = file['OUT_Fa_celine'][0][i - old_lenght]
+            self.elevation_list[i] = file['OUT_Fb_celine'][0][i - old_lenght]
 
 
         print('Added data from ' + file_path)
@@ -99,19 +106,13 @@ class Dataset:
             self.map2_list[i] = pretreatment(self.map2_list[i])
             self.map3_list[i] = pretreatment(self.map3_list[i])
             self.combined_list[i] = pretreatment(self.combined_list[i])
-            max_val = np.max([np.max(self.map1_list[i]), np.max(self.map2_list[i]), np.max(self.map3_list[i]), np.max(self.combined_list[i])])
             min_val = np.min([np.min(self.map1_list[i]), np.min(self.map2_list[i]), np.min(self.map3_list[i]), np.min(self.combined_list[i])])
+            max_val = np.max([np.max(self.map1_list[i]), np.max(self.map2_list[i]), np.max(self.map3_list[i]), np.max(self.combined_list[i])])
+            self.min_max_values[i] = (min_val, max_val)
             self.map1_list[i] = (self.map1_list[i] - min_val) / (max_val - min_val)
             self.map2_list[i] = (self.map2_list[i] - min_val) / (max_val - min_val)
             self.map3_list[i] = (self.map3_list[i] - min_val) / (max_val - min_val)
             self.combined_list[i] = (self.combined_list[i] - min_val) / (max_val - min_val)
-
-        """ min_val = np.min([np.min(self.map1_list), np.min(self.map2_list), np.min(self.map3_list), np.min(self.combined_list)])
-        max_val = np.max([np.max(self.map1_list), np.max(self.map2_list), np.max(self.map3_list), np.max(self.combined_list)])
-        self.map1_list = (self.map1_list - min_val) / (max_val - min_val)
-        self.map2_list = (self.map2_list - min_val) / (max_val - min_val)
-        self.map3_list = (self.map3_list - min_val) / (max_val - min_val)
-        self.combined_list = (self.combined_list - min_val) / (max_val - min_val) """
 
         if self.save_maps:
             self.map1_list_sv = self.map1_list.copy()
@@ -119,8 +120,33 @@ class Dataset:
             self.map3_list_sv = self.map3_list.copy()
             self.combined_list_sv = self.combined_list.copy()
 
+    def rev_preprocess(self, map, i):
+        min_val, max_val = self.min_max_values[i]
+        map = map * (max_val - min_val) + min_val
+        map = np.power(10, map)
+        return map
+    
+    def embed_map(self, pred, i):
+        map1 = self.map1_list_sv[i]
+        x, y = self.get_center(map1)
+        box = np.array([x - self.crop_size / 2, y - self.crop_size / 2, x + self.crop_size / 2, y + self.crop_size / 2])
+        box = box.astype(int)
+        box = np.clip(box, 0, 512)
+        pred_fused = pred * self.mask3_list[i] + self.map3_list[i] * (1 - self.mask3_list[i])
+        map = self.map3_list_sv[i]
+        map[box[0]:box[2], box[1]:box[3]] = pred_fused[0:(box[2] - box[0]), 0:(box[3] - box[1])]
+        return map
+    
+    def compute_stray_light(self, map):
+        i, j = self.get_center(map)
+        nominal = np.sum(map[i:i+2, j:j+2])
+        map = map / nominal
+        map[i:i+2, j:j+2] = 0
+        return i, j, np.sum(map)
     
     def crop_data(self, crop_size):
+        self.crop_size = crop_size
+
         map1_list_cropped = np.zeros((len(self.map1_list), crop_size, crop_size))
         mask1_list_cropped = np.zeros((len(self.mask1_list), crop_size, crop_size))
         map2_list_cropped = np.zeros((len(self.map2_list), crop_size, crop_size))
@@ -129,8 +155,8 @@ class Dataset:
         mask3_list_cropped = np.zeros((len(self.mask3_list), crop_size, crop_size))
         combined_list_cropped = np.zeros((len(self.combined_list), crop_size, crop_size))
         for i in range(len(self.map1_list)):
-            center = self.get_center(i)
-            box = np.array([center[0] - crop_size / 2, center[1] - crop_size / 2, center[0] + crop_size / 2, center[1] + crop_size / 2])
+            x, y = self.get_center(self.map1_list[i])
+            box = np.array([x - crop_size / 2, y - crop_size / 2, x + crop_size / 2, y + crop_size / 2])
             box = box.astype(int)
             box = np.clip(box, 0, 512)
             map1_list_cropped[i] = self.crop_map(self.map1_list[i], box, crop_size)
@@ -149,11 +175,24 @@ class Dataset:
         self.mask3_list = mask3_list_cropped
         self.combined_list = combined_list_cropped
 
-    def get_center(self, i):
-        map = self.map1_list[i]
-        max_value = np.max(map)
-        max_index = np.where(map == max_value)
-        return max_index[0][0], max_index[1][0]
+    def get_center(self, map):
+        max_sum = 0
+        nom_i = 0
+        nom_j = 0
+        max = np.max(map)
+        coord = np.where(map == max)
+        i_m = coord[0][0]
+        j_m = coord[1][0]
+        for i in range(i_m - 2, i_m + 2):
+            for j in range(j_m - 2, j_m + 2):
+                if i < 0 or j < 0 or i >= 512 or j >= 512:
+                    continue
+                sum = np.sum(map[i:i+2, j:j+2])
+                if sum > max_sum:
+                    max_sum = sum
+                    nom_i = i
+                    nom_j = j
+        return (nom_i, nom_j)
 
     def crop_map(self, image, box, crop_size):
         image = image[box[0]:box[2], box[1]:box[3]]
