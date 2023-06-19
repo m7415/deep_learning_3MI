@@ -271,7 +271,14 @@ class Dataset:
         i, j = self.get_center(map)
         nominal = np.sum(map[i : i + 2, j : j + 2])
         map = map / nominal
-        map[i : i + 2, j : j + 2] = 0
+        #map[i : i + 2, j : j + 2] = 0
+        # set a 20 radius disc around (i,j) to 0
+        for x in range(i - 20, i + 20):
+            for y in range(j - 20, j + 20):
+                if x < 0 or y < 0 or x >= 512 or y >= 512:
+                    continue
+                if np.sqrt((x - i) ** 2 + (y - j) ** 2) < 20:
+                    map[x, y] = 0
         return i, j, np.sum(map)
 
     def crop_data(self, crop_size):

@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow import keras
 from keras.models import Model
 from keras.layers import Dense, Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate, Dropout
+from keras.regularizers import l2
 
 import pydot
 
@@ -195,23 +196,25 @@ class UNet(ModelTemplate):
         conv_layers_down = []
         pool = None
 
+        w_decay = 0.00001
+
         # Contractive path
         for i, filters in enumerate(self.filters[:-1]):
             conv1_name = f"conv_down_1_{i+1}"
             conv2_name = f"conv_down_2_{i+1}"
             if i == 0:
                 conv1 = Conv2D(
-                    filters, 3, activation="relu", padding="same", name=conv1_name,
+                    filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv1_name,
                 )(input_layer)
                 drop = Dropout(self.dropout)(conv1)
             else:
                 conv1 = Conv2D(
-                    filters, 3, activation="relu", padding="same", name=conv1_name,
+                    filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv1_name,
                 )(pool)
                 drop = Dropout(self.dropout)(conv1)
 
             conv2 = Conv2D(
-                filters, 3, activation="relu", padding="same", name=conv2_name
+                filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv2_name
             )(drop)
             pool_name = f"pool_{i+1}"
             pool = MaxPooling2D(pool_size=(2, 2), name=pool_name)(conv2)
@@ -219,11 +222,11 @@ class UNet(ModelTemplate):
 
         # Bottleneck
         conv_b_1 = Conv2D(
-            self.filters[-1], 3, activation="relu", padding="same", name="conv_b_1",
+            self.filters[-1], 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name="conv_b_1",
         )(pool)
         drop = Dropout(self.dropout)(conv_b_1)
         conv_b_2 = Conv2D(
-            self.filters[-1], 3, activation="relu", padding="same", name="conv_b_2"
+            self.filters[-1], 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name="conv_b_2"
         )(drop)
 
         # Expansive path
@@ -249,17 +252,17 @@ class UNet(ModelTemplate):
                 merge = concatenate([up, skip_connection], axis=-1)
 
             conv1_up = Conv2D(
-                filters, 3, activation="relu", padding="same", name=conv1_name,
+                filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv1_name,
             )(merge)
             drop = Dropout(self.dropout)(conv1_up)
             conv2_up = Conv2D(
-                filters, 3, activation="relu", padding="same", name=conv2_name
+                filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv2_name
             )(drop)
             conv_layers_up.append((conv1_up, conv2_up))
 
         # Output
         output_layer = Conv2D(
-            self.output_shape[2], 3, activation="sigmoid", padding="same", name="output"
+            self.output_shape[2], 3, activation="sigmoid", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name="output"
         )(conv2_up)
 
         # Build model
