@@ -14,6 +14,7 @@ class UNet(ModelTemplate):
         input_shape = (512, 512, 1),
         output_shape = (512, 512, 1),
         filters = [64, 128, 256],
+        block_sizes = [2, 2, 2],
         dropout=0.2,
         optimizer="adam",
         loss="mean_squared_error",
@@ -33,6 +34,7 @@ class UNet(ModelTemplate):
         super().__init__(input_shape, output_shape, optimizer, loss)
 
         self.filters = filters
+        self.block_sizes = block_sizes
         self.dropout = dropout
 
         self.model = self.build_model()
@@ -198,72 +200,70 @@ class UNet(ModelTemplate):
 
         w_decay = 0.00001
 
+        block_size = self.block_sizes[0]
         # Contractive path
         for i, filters in enumerate(self.filters[:-1]):
-            conv1_name = f"conv_down_1_{i+1}"
-            conv2_name = f"conv_down_2_{i+1}"
-            if i == 0:
-                conv1 = Conv2D(
-                    filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv1_name,
-                )(input_layer)
-                drop = Dropout(self.dropout)(conv1)
-            else:
-                conv1 = Conv2D(
-                    filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv1_name,
-                )(pool)
-                drop = Dropout(self.dropout)(conv1)
+            # Convolutional block
+            for j in range(block_size):
+                conv_name = f"conv_down_{j+1}_{i+1}"
+                if j == 0:
+                    if i == 0:
+                        conv_down = Conv2D(
+                            filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
+                        )(input_layer)
+                    else:
+                        conv_down = Conv2D(
+                            filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
+                        )(pool)
+                else:
+                    conv_down = Conv2D(
+                        filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
+                    )(conv_down)
+                # dropout
+                drop = Dropout(self.dropout)(conv_down)
 
-            conv2 = Conv2D(
-                filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv2_name
-            )(drop)
             pool_name = f"pool_{i+1}"
-            pool = MaxPooling2D(pool_size=(2, 2), name=pool_name)(conv2)
-            conv_layers_down.append((conv1, conv2))
+            pool = MaxPooling2D(pool_size=(2, 2), name=pool_name)(conv_down)
+            conv_layers_down.append(conv_down)
 
+        block_size = self.block_sizes[1]
         # Bottleneck
-        conv_b_1 = Conv2D(
-            self.filters[-1], 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name="conv_b_1",
-        )(pool)
-        drop = Dropout(self.dropout)(conv_b_1)
-        conv_b_2 = Conv2D(
-            self.filters[-1], 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name="conv_b_2"
-        )(drop)
+        for j in range(block_size):
+            conv_name = f"conv_b_{j+1}"
+            conv_b = Conv2D(
+                self.filters[-1], 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
+            )(pool)
+            drop = Dropout(self.dropout)(conv_b)
 
-        # Expansive path
         conv_layers_down = conv_layers_down[::-1]  # Reverse the list
-        conv_layers_up = []
-        up = None
 
+        block_size = self.block_sizes[2]
+        # Expansive path
         for i, filters in enumerate(self.filters[:-1][::-1]):
-            conv1_name = f"conv_up_1_{i+1}"
-            conv2_name = f"conv_up_2_{i+1}"
-            up_name = f"up_{i+1}"
-            if i == 0:
-                up = UpSampling2D(size=(2, 2), name=up_name)(conv_b_2)
-                skip_connection = conv_layers_down[i][
-                    1
-                ]  # Use the corresponding conv2 layer from the contractive path
-                merge = concatenate([up, skip_connection], axis=-1)
-            else:
-                up = UpSampling2D(size=(2, 2), name=up_name)(conv2_up)
-                skip_connection = conv_layers_down[i][
-                    1
-                ]  # Use the corresponding conv2 layer from the contractive path
-                merge = concatenate([up, skip_connection], axis=-1)
-
-            conv1_up = Conv2D(
-                filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv1_name,
-            )(merge)
-            drop = Dropout(self.dropout)(conv1_up)
-            conv2_up = Conv2D(
-                filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv2_name
-            )(drop)
-            conv_layers_up.append((conv1_up, conv2_up))
+            for j in range(block_size):
+                conv_name = f"conv_up_{j+1}_{i+1}"
+                up_name = f"up_{i+1}"
+                if j == 0:
+                    if i == 0:
+                        up = UpSampling2D(size=(2, 2), name=up_name)(conv_b)
+                    else:
+                        up = UpSampling2D(size=(2, 2), name=up_name)(conv_up)
+                    skip_connection = conv_layers_down[i]
+                    merge = concatenate([up, skip_connection], axis=-1)
+                    conv_up = Conv2D(
+                        filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
+                    )(merge)
+                    drop = Dropout(self.dropout)(conv_up)
+                else:
+                    conv_up = Conv2D(
+                        filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
+                    )(drop)
+                    drop = Dropout(self.dropout)(conv_up)
 
         # Output
         output_layer = Conv2D(
             self.output_shape[2], 3, activation="sigmoid", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name="output"
-        )(conv2_up)
+        )(conv_up)
 
         # Build model
         model = Model(inputs=input_layer, outputs=output_layer)

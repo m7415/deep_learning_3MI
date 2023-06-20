@@ -1,5 +1,10 @@
-from models import UNet, Autoencoder
 import tensorflow as tf
+
+from classes.data_wraper import Dataset
+from classes.UNet import UNet
+from classes.Experiment import Experiment
+from classes.utils import plot_map, plot_radial_profile, apply_mask
+
 
 # Model
 input_size = (512, 512, 3)
@@ -9,12 +14,6 @@ loss = tf.keras.losses.MeanSquaredError()
 batch_size = 16
 epochs = 5
 
-unet = UNet(input_size, output_size, [32, 64, 128, 256], optimiser, loss)
+unet = UNet(input_size, output_size, [32, 64, 128, 256], 0.2, optimiser, loss)
 
-# unet.summary(graph=True)
-
-AE = Autoencoder(
-    input_size, isConv=True, filters=[16, 8], optimizer=optimiser, loss=loss
-)
-
-# AE.summary(graph=True)
+unet.summary()
