@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow import keras
 from keras.models import Model
-from keras.layers import Dense, Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate, Dropout
+from keras.layers import Dense, Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate, Dropout, BatchNormalization
 from keras.regularizers import l2
 
 import pydot
@@ -52,11 +52,11 @@ class UNet(ModelTemplate):
             expansive_path_names = ["output"]
 
             for i in range(len(self.filters)):
-                contractive_path_names.append(f"conv_down_1_{i+1}")
-                contractive_path_names.append(f"conv_down_2_{i+1}")
+                for j in range(self.block_sizes[0]):
+                    contractive_path_names.append(f"conv_down_{j+1}_{i+1}")
                 contractive_path_names.append(f"pool_{i+1}")
-                expansive_path_names.append(f"conv_up_1_{i+1}")
-                expansive_path_names.append(f"conv_up_2_{i+1}")
+                for j in range(self.block_sizes[2]):
+                    expansive_path_names.append(f"conv_up_{j+1}_{i+1}")
                 expansive_path_names.append(f"up_{i+1}")
 
             for i, layer in enumerate(self.model.layers):
@@ -70,22 +70,22 @@ class UNet(ModelTemplate):
                         style="rounded, filled",
                     )
                     # save the index of the subgraph nodes
-                    if layer.name == "conv_b_1":
-                        nodes_to_add.append(i)
-                        nodes_to_add.append(i - 1)
-                    elif layer.name == "conv_b_2":
-                        nodes_to_add.append(i)
-                        nodes_to_add.append(i + 1)
+                    for j in range(self.block_sizes[1]):
+                        if layer.name == f"conv_b_{j+1}":
+                            nodes_to_add.append(i)
                     # color the nodes
                     if layer.name in contractive_path_names:
                         node.set_fillcolor("pink")
-                    elif layer.name == "conv_b_1" or layer.name == "conv_b_2":
-                        node.set_fillcolor("lightgreen")
                     elif layer.name in expansive_path_names:
                         node.set_fillcolor("lightblue")
+                    else:
+                        node.set_fillcolor("lightgreen")
                     dot.add_node(node)
                     node_dict[layer.name] = node
 
+            # add the node before the bottleneck and after the bottleneck
+            nodes_to_add.append(np.min(nodes_to_add) - 1)
+            nodes_to_add.append(np.max(nodes_to_add) + 1)
             for i in nodes_to_add:
                 subdot.add_node(node_dict[self.model.layers[i].name])
 
@@ -95,16 +95,23 @@ class UNet(ModelTemplate):
             input_layer = self.model.get_layer("input")
 
             for i in range(len(self.filters) - 1):
-                conv_layer_1 = self.model.get_layer(f"conv_down_1_{i+1}")
-                if i == 0:
-                    edge = pydot.Edge(
-                        node_dict[input_layer.name], node_dict[conv_layer_1.name]
-                    )
-                else:
-                    edge = pydot.Edge(
-                        node_dict[pool_layer.name], node_dict[conv_layer_1.name]
-                    )
-                dot.add_edge(edge)
+                for j in range(self.block_sizes[0]):
+                    conv_layer = self.model.get_layer(f"conv_down_{j+1}_{i+1}")
+                    if j == 0:
+                        if i == 0:
+                            edge = pydot.Edge(
+                                node_dict[input_layer.name], node_dict[conv_layer.name]
+                            )
+                        else:
+                            edge = pydot.Edge(
+                                node_dict[pool_layer.name], node_dict[conv_layer.name]
+                            )
+                    else:
+                        edge = pydot.Edge(
+                            node_dict[conv_layer_2.name], node_dict[conv_layer.name]
+                        )
+                    dot.add_edge(edge)
+
                 conv_layer_2 = self.model.get_layer(f"conv_down_2_{i+1}")
                 dot.add_edge(
                     pydot.Edge(
@@ -199,6 +206,9 @@ class UNet(ModelTemplate):
         pool = None
 
         w_decay = 0.00001
+        #, kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay)
+
+        initializer = 'he_uniform'
 
         block_size = self.block_sizes[0]
         # Contractive path
@@ -209,31 +219,35 @@ class UNet(ModelTemplate):
                 if j == 0:
                     if i == 0:
                         conv_down = Conv2D(
-                            filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
+                            filters, 3, activation="relu", kernel_initializer=initializer, padding="same", name=conv_name,
                         )(input_layer)
                     else:
                         conv_down = Conv2D(
-                            filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
+                            filters, 3, activation="relu", kernel_initializer=initializer, padding="same", name=conv_name,
                         )(pool)
                 else:
                     conv_down = Conv2D(
-                        filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
-                    )(conv_down)
-                # dropout
-                drop = Dropout(self.dropout)(conv_down)
+                        filters, 3, activation="relu", kernel_initializer=initializer, padding="same", name=conv_name,
+                    )(batch_norm)
+                batch_norm = BatchNormalization()(conv_down)
 
             pool_name = f"pool_{i+1}"
-            pool = MaxPooling2D(pool_size=(2, 2), name=pool_name)(conv_down)
+            pool = MaxPooling2D(pool_size=(2, 2), name=pool_name)(batch_norm)
             conv_layers_down.append(conv_down)
 
         block_size = self.block_sizes[1]
         # Bottleneck
         for j in range(block_size):
             conv_name = f"conv_b_{j+1}"
-            conv_b = Conv2D(
-                self.filters[-1], 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
-            )(pool)
-            drop = Dropout(self.dropout)(conv_b)
+            if j == 0:
+                conv_b = Conv2D(
+                    self.filters[-1], 3, activation="relu", kernel_initializer=initializer, padding="same", name=conv_name,
+                )(pool)
+            else:
+                conv_b = Conv2D(
+                    self.filters[-1], 3, activation="relu", kernel_initializer=initializer, padding="same", name=conv_name,
+                )(batch_norm)
+            batch_norm = BatchNormalization()(conv_b)
 
         conv_layers_down = conv_layers_down[::-1]  # Reverse the list
 
@@ -245,25 +259,24 @@ class UNet(ModelTemplate):
                 up_name = f"up_{i+1}"
                 if j == 0:
                     if i == 0:
-                        up = UpSampling2D(size=(2, 2), name=up_name)(conv_b)
+                        up = UpSampling2D(size=(2, 2), name=up_name)(batch_norm)
                     else:
                         up = UpSampling2D(size=(2, 2), name=up_name)(conv_up)
                     skip_connection = conv_layers_down[i]
                     merge = concatenate([up, skip_connection], axis=-1)
                     conv_up = Conv2D(
-                        filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
+                        filters, 3, activation="relu", kernel_initializer=initializer, padding="same", name=conv_name,
                     )(merge)
-                    drop = Dropout(self.dropout)(conv_up)
                 else:
                     conv_up = Conv2D(
-                        filters, 3, activation="relu", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name=conv_name,
-                    )(drop)
-                    drop = Dropout(self.dropout)(conv_up)
+                        filters, 3, activation="relu", kernel_initializer=initializer, padding="same", name=conv_name,
+                    )(batch_norm)
+                batch_norm = BatchNormalization()(conv_up)
 
         # Output
         output_layer = Conv2D(
-            self.output_shape[2], 3, activation="sigmoid", padding="same", kernel_regularizer=l2(w_decay), bias_regularizer=l2(w_decay), name="output"
-        )(conv_up)
+            self.output_shape[2], 3, activation="sigmoid", kernel_initializer='glorot_uniform', padding="same", name="output"
+        )(batch_norm)
 
         # Build model
         model = Model(inputs=input_layer, outputs=output_layer)
