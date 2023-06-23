@@ -228,11 +228,12 @@ class UNet(ModelTemplate):
                 else:
                     conv_down = Conv2D(
                         filters, 3, activation="relu", kernel_initializer=initializer, padding="same", name=conv_name,
-                    )(batch_norm)
+                    )(drop)
                 batch_norm = BatchNormalization()(conv_down)
+                drop = Dropout(self.dropout)(batch_norm)
 
             pool_name = f"pool_{i+1}"
-            pool = MaxPooling2D(pool_size=(2, 2), name=pool_name)(batch_norm)
+            pool = MaxPooling2D(pool_size=(2, 2), name=pool_name)(drop)
             conv_layers_down.append(conv_down)
 
         block_size = self.block_sizes[1]
@@ -246,8 +247,9 @@ class UNet(ModelTemplate):
             else:
                 conv_b = Conv2D(
                     self.filters[-1], 3, activation="relu", kernel_initializer=initializer, padding="same", name=conv_name,
-                )(batch_norm)
+                )(drop)
             batch_norm = BatchNormalization()(conv_b)
+            drop = Dropout(self.dropout)(batch_norm)
 
         conv_layers_down = conv_layers_down[::-1]  # Reverse the list
 
@@ -259,7 +261,7 @@ class UNet(ModelTemplate):
                 up_name = f"up_{i+1}"
                 if j == 0:
                     if i == 0:
-                        up = UpSampling2D(size=(2, 2), name=up_name)(batch_norm)
+                        up = UpSampling2D(size=(2, 2), name=up_name)(drop)
                     else:
                         up = UpSampling2D(size=(2, 2), name=up_name)(conv_up)
                     skip_connection = conv_layers_down[i]
@@ -270,13 +272,14 @@ class UNet(ModelTemplate):
                 else:
                     conv_up = Conv2D(
                         filters, 3, activation="relu", kernel_initializer=initializer, padding="same", name=conv_name,
-                    )(batch_norm)
+                    )(drop)
                 batch_norm = BatchNormalization()(conv_up)
+                drop = Dropout(self.dropout)(batch_norm)
 
         # Output
         output_layer = Conv2D(
             self.output_shape[2], 3, activation="sigmoid", kernel_initializer='glorot_uniform', padding="same", name="output"
-        )(batch_norm)
+        )(drop)
 
         # Build model
         model = Model(inputs=input_layer, outputs=output_layer)

@@ -201,7 +201,7 @@ class Dataset:
     def preprocess_data(self):
         def pretreatment(x):
             x = np.abs(x)
-            x[x == 0] = np.min(x[x != 0])
+            x[x == 0] = 1e-15
             x = np.log10(x)
             return x
 
