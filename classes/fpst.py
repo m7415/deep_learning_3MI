@@ -37,10 +37,14 @@ def load_FPST(path, total_tasks):
 
     progress_bar = tqdm(desc='Process', total=total_tasks, unit='task', dynamic_ncols=True)
 
+    loaded = 0
     for filename in filenames:
+        if loaded >= total_tasks:
+            break
         file = loadmat(os.path.join(path, filename))
         fpsts += file["fpsts"].tolist()
         progress_bar.update(len(file["fpsts"].tolist()))
+        loaded += len(file["fpsts"].tolist())
 
     progress_bar.close()
 
@@ -93,7 +97,7 @@ def get_map(i, j, forbidden, len_map, maps, coords):
     for i in range(len(values)):
         x = math.floor(coords[i][0] / stride)
         y = math.floor(coords[i][1] / stride)
-        map[x][y] = values[i]
+        map[x][y] = x
     return map
 
 def get_maps(maps, coords, ind_forbiden, len_map, len_map_big):
