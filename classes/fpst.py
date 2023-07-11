@@ -45,6 +45,8 @@ def load_FPST(path, total_tasks):
         fpsts += file["fpsts"].tolist()
         progress_bar.update(len(file["fpsts"].tolist()))
         loaded += len(file["fpsts"].tolist())
+    
+    fpsts = np.array(fpsts)
 
     progress_bar.close()
 
@@ -168,3 +170,53 @@ def rev_densify_to(map, target_grid):
             y_ind = int(y * len_map / target_grid)
             map2[x][y] = map[x_ind][y_ind]
     return map2
+
+def get_corners(len_map, size):
+    # the corners are triangles of size size
+
+    corners = []
+    for i in range(size):
+        for j in range(size):
+            if i + j < size:
+                corners.append([i, j])
+            else:
+                break
+    
+    # replicate the corners to the other 3 quadrants
+    corners = corners + [[len_map - i - 1, j] for i, j in corners]
+    corners = corners + [[i, len_map - j - 1] for i, j in corners]
+    corners = corners + [[len_map - i - 1, len_map - j - 1] for i, j in corners]
+    
+    return corners
+
+def smooth_map(map):
+    len_map = map.shape[0]
+    corners = []
+    if len_map == 26:
+        corners = get_corners(len_map, 2)
+    elif len_map == 32:
+        corners = get_corners(len_map, 2)
+    elif len_map == 64:
+        corners = get_corners(len_map, 8)
+    elif len_map == 128:
+        pass
+
+    map = np.nan_to_num(map)
+    for i in range(len_map):
+        for j in range(len_map):
+            if map[i, j] == 0:
+                if [i, j] not in corners:
+                    map[i, j] = np.mean(map[max(0, i - 1):min(len_map, i + 2), max(0, j - 1):min(len_map, j + 2)])
+
+    return map
+
+def process(map):
+    map = smooth_map(map)
+    map[map == 0] = 10e-17
+    map = np.log10(np.abs(map))
+    return map
+
+def rev_process(map):
+    map = np.power(10, map)
+    map[map == 10e-17] = 0
+    return map
