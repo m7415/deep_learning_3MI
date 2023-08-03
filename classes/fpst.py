@@ -189,6 +189,23 @@ def get_corners(len_map, size):
     
     return corners
 
+def nullify_corners(map):
+    len_map = map.shape[0]
+    corners = []
+    if len_map == 26:
+        corners = get_corners(len_map, 2)
+    elif len_map == 32:
+        corners = get_corners(len_map, 2)
+    elif len_map == 64:
+        corners = get_corners(len_map, 8)
+    elif len_map == 128:
+        pass
+
+    for i, j in corners:
+        map[i, j] = 0
+
+    return map
+
 def smooth_map(map):
     len_map = map.shape[0]
     corners = []
@@ -218,5 +235,5 @@ def process(map):
 
 def rev_process(map):
     map = np.power(10, map)
-    map[map == 10e-17] = 0
+    map[map <= 10e-17] = 0
     return map

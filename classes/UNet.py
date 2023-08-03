@@ -6,6 +6,8 @@ from keras.regularizers import l2
 
 import pydot
 
+import numpy as np
+
 from .utils import ModelTemplate
 
 class UNet(ModelTemplate):
@@ -60,8 +62,12 @@ class UNet(ModelTemplate):
                 expansive_path_names.append(f"up_{i+1}")
 
             for i, layer in enumerate(self.model.layers):
-                if not isinstance(layer, tf.keras.layers.Concatenate) and not isinstance(
+                if not isinstance(
+                    layer, tf.keras.layers.Concatenate
+                ) and not isinstance(
                     layer, tf.keras.layers.Dropout
+                ) and not isinstance(
+                    layer, tf.keras.layers.BatchNormalization
                 ):
                     node = pydot.Node(
                         layer.name,
@@ -83,9 +89,6 @@ class UNet(ModelTemplate):
                     dot.add_node(node)
                     node_dict[layer.name] = node
 
-            # add the node before the bottleneck and after the bottleneck
-            nodes_to_add.append(np.min(nodes_to_add) - 1)
-            nodes_to_add.append(np.max(nodes_to_add) + 1)
             for i in nodes_to_add:
                 subdot.add_node(node_dict[self.model.layers[i].name])
 
@@ -107,92 +110,89 @@ class UNet(ModelTemplate):
                                 node_dict[pool_layer.name], node_dict[conv_layer.name]
                             )
                     else:
+                        conv_layer_prev = self.model.get_layer(f"conv_down_{j}_{i+1}")
                         edge = pydot.Edge(
-                            node_dict[conv_layer_2.name], node_dict[conv_layer.name]
+                            node_dict[conv_layer_prev.name], node_dict[conv_layer.name]
                         )
                     dot.add_edge(edge)
 
-                conv_layer_2 = self.model.get_layer(f"conv_down_2_{i+1}")
-                dot.add_edge(
-                    pydot.Edge(
-                        node_dict[conv_layer_1.name], node_dict[conv_layer_2.name]
-                    )
-                )
                 pool_layer = self.model.get_layer(f"pool_{i+1}")
                 dot.add_edge(
-                    pydot.Edge(node_dict[conv_layer_2.name], node_dict[pool_layer.name])
+                    pydot.Edge(node_dict[conv_layer.name], node_dict[pool_layer.name])
                 )
 
             # Connect the layers in the bottleneck
-            conv_b_layer_1 = self.model.get_layer("conv_b_1")
-            dot.add_edge(
-                pydot.Edge(
-                    node_dict[pool_layer.name],
-                    node_dict[conv_b_layer_1.name],
-                    constraint="false",
-                )
-            )
-            conv_b_layer_2 = self.model.get_layer("conv_b_2")
-            dot.add_edge(
-                pydot.Edge(
-                    node_dict[conv_b_layer_1.name],
-                    node_dict[conv_b_layer_2.name],
-                    constraint="false",
-                )
-            )
+            for i in range(self.block_sizes[1]):
+                conv_b_layer = self.model.get_layer(f"conv_b_{i+1}")
+                if i == 0:
+                    edge = pydot.Edge(
+                        node_dict[pool_layer.name], node_dict[conv_b_layer.name]
+                    )
+                else:
+                    conv_b_layer_prev = self.model.get_layer(f"conv_b_{i}")
+                    edge = pydot.Edge(
+                        node_dict[conv_b_layer_prev.name],
+                        node_dict[conv_b_layer.name],
+                        constraint="false",
+                    )
+                dot.add_edge(edge)
 
             # Connect the layers in the expansive path
             for i in range(1, len(self.filters)):
-                up_layer = self.model.get_layer(f"up_{i}")
-                if i == 1:
-                    edge = pydot.Edge(
-                        node_dict[conv_b_layer_2.name],
-                        node_dict[up_layer.name],
-                        constraint="false",
-                    )
-                else:
-                    edge = pydot.Edge(
-                        node_dict[up_layer.name],
-                        node_dict[conv_layer_2.name],
-                        dir="back",
-                    )
-                dot.add_edge(edge)
-                conv_layer_1 = self.model.get_layer(f"conv_up_1_{i}")
-                dot.add_edge(
-                    pydot.Edge(
-                        node_dict[conv_layer_1.name],
-                        node_dict[up_layer.name],
-                        dir="back",
-                    )
-                )
-                conv_layer_2 = self.model.get_layer(f"conv_up_2_{i}")
-                dot.add_edge(
-                    pydot.Edge(
-                        node_dict[conv_layer_2.name],
-                        node_dict[conv_layer_1.name],
-                        dir="back",
-                    )
-                )
+                for j in range(self.block_sizes[2]):
+                    up_layer = self.model.get_layer(f"up_{i}")
+                    if j == 0:
+                        if i == 1:
+                            edge = pydot.Edge(
+                                node_dict[conv_b_layer.name],
+                                node_dict[up_layer.name],
+                                constraint="false",
+                            )
+                            dot.add_edge(edge)
+                        else:
+                            edge = pydot.Edge(
+                                node_dict[up_layer.name],
+                                node_dict[conv_layer.name],
+                                dir="back",
+                            )
+                            dot.add_edge(edge)
+                        conv_layer = self.model.get_layer(f"conv_up_{j+1}_{i}")
+                        edge = pydot.Edge(
+                                node_dict[conv_layer.name],
+                                node_dict[up_layer.name],
+                                dir="back",
+                            )
+                    else:
+                        conv_layer_next = self.model.get_layer(f"conv_up_{j+1}_{i}")
+                        edge = pydot.Edge(
+                            node_dict[conv_layer_next.name],
+                            node_dict[conv_layer.name],
+                            dir="back",
+                        )
+                    dot.add_edge(edge)
+                    conv_layer = self.model.get_layer(f"conv_up_{j+1}_{i}")
+
             output_layer = self.model.get_layer("output")
             dot.add_edge(
                 pydot.Edge(
                     node_dict[output_layer.name],
-                    node_dict[conv_layer_2.name],
+                    node_dict[conv_layer.name],
                     dir="back",
                 )
             )
 
             # add the skip connections
             for i in range(len(self.filters) - 1):
-                start_layer = self.model.get_layer(f"conv_down_2_{i+1}")
-                end_layer = self.model.get_layer(f"conv_up_1_{len(self.filters)-i-1}")
-                dot.add_edge(
-                    pydot.Edge(
-                        node_dict[start_layer.name],
-                        node_dict[end_layer.name],
+                for j in range(self.block_sizes[0]):
+                    conv_layer_down = self.model.get_layer(f"conv_down_{j+1}_{i+1}")
+                    conv_layer_up = self.model.get_layer(f"conv_up_{self.block_sizes[2] - j}_{len(self.filters) - i - 1}")
+                    edge = pydot.Edge(
+                        node_dict[conv_layer_down.name],
+                        node_dict[conv_layer_up.name],
+                        style="dashed",
                         constraint="false",
                     )
-                )
+                    dot.add_edge(edge)
 
             # Save the graph
             graph_path = f"{graph_name}.png"
@@ -202,7 +202,7 @@ class UNet(ModelTemplate):
     def build_model(self):
 
         input_layer = Input(shape=self.input_shape, name="input")
-        conv_layers_down = []
+        
         pool = None
 
         w_decay = 0.00001
@@ -212,6 +212,7 @@ class UNet(ModelTemplate):
 
         block_size = self.block_sizes[0]
         # Contractive path
+        conv_layers_down = []
         for i, filters in enumerate(self.filters[:-1]):
             # Convolutional block
             for j in range(block_size):
