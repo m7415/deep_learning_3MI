@@ -1,12 +1,21 @@
-# CSL_3MI_ML
+# Correction de Lumière Parasite pour Instruments Optiques de Haute Précision
 
-## Description
-Experimentations on the use of ML in stray light correction on the case of the 3MI
+Ce repo GitHub est dédié à mon rapport de stage au Centre Spatial de Liège, où j'ai eu l'opportunité de travailler sur un projet passionnant visant à améliorer les performances des instruments optiques de haute précision, en mettant un fort accent sur l'instrument d'observation de la Terre, 3MI.
 
-## TODO
+**À propos du Projet :**
 
-- [ ] change data_wraper to lighten the memory usage
-- [ ] do a grid search on the experiment parameters
+L'instrument optique est au cœur des missions spatiales, et sa performance est cruciale pour la qualité des images obtenues. Mon travail a consisté à introduire des techniques d'apprentissage profond (deep learning) pour améliorer la correction de la lumière parasite, un défi majeur dans ce domaine. La lumière parasite peut dégrader la résolution et le rapport signal/bruit des images, ce qui peut avoir un impact significatif sur le succès des missions spatiales.
+
+**Objectifs :**
+
+- Développer une solution de correction des aberrations de lumière parasite.
+- Améliorer la généralisation des tâches de correction.
+- Augmenter la robustesse pour réduire les corrections manuelles.
+
+Ce repo contient le code source de mes expérimentations lors de ce stage, ainsi que le rapport de stage qui en a résulté. Les données utilisées ne sont pas incluses, car elles sont très volumineuses, et confidentielles. Le code source est brouillon, et mériterait d'être nettoyé. Certains notebook ne sont exécutable que sur google colab.
+
+Je conseille pour commencer de lire mon [rapport de stage](SDIA_PETITPOISSON_Maxime_Rapport_2A.pdf). Le notebook [black and white](black_and_white.ipynb) contient aussi des résultats intéressants qui ne sont pas présentés dans le rapport.
+N'hésitez pas à explorer les différentes sections et à poser des questions si vous en avez. Votre intérêt et vos commentaires sont les bienvenus !
 
 ## Installation
 
@@ -29,17 +38,3 @@ source venv/Scripts/activate
 ```
 pip install -r requirements.txt
 ```
-
-## TODO
-* Repasser en linéaire -> map théorique
-* prendre le nominal (somme des 4 pixels maximum dans un carré de 2x2)
-* normaliser la map au nominal
-
-* mettre le nominal à 0
-* faire la somme de la map -> stray light
-* on obtient les valeurs de tous les champs
-* on plot la valeur de la straylight en fonction de x et y du nominal
-* scatter pour avoir une cartographie de l'integrale
-
-* créer un mask de 20 autour du nominal (disque)
-* faire la somme de la straylight sauf dans le disque au milieu
