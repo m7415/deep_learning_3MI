@@ -25,6 +25,25 @@ def plot_radial_profile(maps, azimut):
         plt.plot(radial_profile)
     plt.show()
 
+def get_center(map):
+        max_sum = 0
+        nom_i = 0
+        nom_j = 0
+        max = np.max(map)
+        coord = np.where(map == max)
+        i_m = coord[0][0]
+        j_m = coord[1][0]
+        for i in range(i_m - 2, i_m + 2):
+            for j in range(j_m - 2, j_m + 2):
+                if i < 0 or j < 0 or i >= 512 or j >= 512:
+                    continue
+                sum = np.sum(map[i : i + 2, j : j + 2])
+                if sum > max_sum:
+                    max_sum = sum
+                    nom_i = i
+                    nom_j = j
+        return (nom_i, nom_j)
+
 class ModelTemplate:
     def __init__(self, input_shape, output_shape, optimizer, loss):
         self.input_shape = input_shape

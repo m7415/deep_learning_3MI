@@ -133,7 +133,6 @@ class UNet(ModelTemplate):
                     edge = pydot.Edge(
                         node_dict[conv_b_layer_prev.name],
                         node_dict[conv_b_layer.name],
-                        constraint="false",
                     )
                 dot.add_edge(edge)
 
@@ -144,9 +143,9 @@ class UNet(ModelTemplate):
                     if j == 0:
                         if i == 1:
                             edge = pydot.Edge(
-                                node_dict[conv_b_layer.name],
                                 node_dict[up_layer.name],
-                                constraint="false",
+                                node_dict[conv_b_layer.name],
+                                dir="back",
                             )
                             dot.add_edge(edge)
                         else:

@@ -4,7 +4,7 @@ from keras.models import Model, Sequential
 from keras.layers import Input, Conv2D, LeakyReLU, UpSampling2D, Conv2DTranspose, Activation
 from keras.layers import BatchNormalization, Dense, Flatten, Concatenate, AveragePooling2D, Dropout
 from keras.optimizers import Adam
-from keras.callbacks import LearningRateScheduler, ModelCheckpoint, EarlyStopping
+from keras.callbacks import EarlyStopping
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -151,6 +151,7 @@ def conv_block(x, num_filters, kernel_size=(3, 3), activation='relu', batch_norm
 # init to test : he_normal, he_uniform, glorot_normal, glorot_uniform, lecun_normal, lecun_uniform
 # dropout rate to test : 0.0, 0.2, 0.4, 0.6, 0.8
 
+# this beauty here !!!
 def get_espcn(input_shape, upscale_factor, num_layers, num_filters_1, num_filters_2, activation, batch_norm, dropout, init):
     input = Input(shape=(input_shape[0], input_shape[1], 1))
 

@@ -24,14 +24,14 @@ class FilePaths:
         channel_type = channel.split("_")[0]
         channel_number = channel.split("_")[1]
         return os.path.join(
-            self.data_dir, "mapsCeline_" + channel_type + "_" + channel_number + "_pol-60.mat"
+            self.data_dir, "MEF", "mapsCeline_" + channel_type + "_" + channel_number + "_pol-60.mat"
         )
 
     def get_coeff_path(self, channel):
         # channel = (FOVfiting|3quadrants)_(2|3|4|5|6|9)
         channel_type = channel.split("_")[0]
         channel_number = channel.split("_")[1]
-        channel_dir = os.path.join(self.data_dir, "3MI-" + channel_number)
+        channel_dir = os.path.join(self.data_dir, "coeff", "3MI-" + channel_number)
         if channel_type == "FOVfitting":
             return [os.path.join(channel_dir, "Test_coef1_FOVfitting.mat")]
         elif channel_type == "3quadrants":
@@ -45,8 +45,9 @@ class FilePaths:
 
 
 class Dataset:
-    def __init__(self, channels):
+    def __init__(self, channels, log=False):
         self.channels = channels
+        self.log = log
         self.file_paths = FilePaths()
 
         self.df = pd.DataFrame(
@@ -197,6 +198,9 @@ class Dataset:
             df["map1"][i] = df["map1"][i] * df["coeff1"][i]
             df["map2"][i] = df["map2"][i] * df["coeff2"][i]
             df["map3"][i] = df["map3"][i] * df["coeff3"][i]
+            df["saved_map1"][i] = df["saved_map1"][i] * df["coeff1"][i]
+            df["saved_map2"][i] = df["saved_map2"][i] * df["coeff2"][i]
+            df["saved_map3"][i] = df["saved_map3"][i] * df["coeff3"][i]
 
     def preprocess_data(self):
         def pretreatment(x):
@@ -205,27 +209,17 @@ class Dataset:
             x = np.log10(x)
             return x
 
-        self.df["map1"] = self.df["map1"].apply(pretreatment)
-        self.df["map2"] = self.df["map2"].apply(pretreatment)
-        self.df["map3"] = self.df["map3"].apply(pretreatment)
-        self.df["combined"] = self.df["combined"].apply(pretreatment)
+        if self.log:
+            self.df["map1"] = self.df["map1"].apply(pretreatment)
+            self.df["map2"] = self.df["map2"].apply(pretreatment)
+            self.df["map3"] = self.df["map3"].apply(pretreatment)
+            self.df["combined"] = self.df["combined"].apply(pretreatment)
 
         # normalize data between 0 and 1 using min and max values from the dataframe
         for i in range(len(self.df)):
-            self.df["min_val"][i] = np.min(
-                [
-                    np.min(self.df["map1"][i]),
-                    np.min(self.df["map2"][i]),
-                    np.min(self.df["map3"][i]),
-                ]
-            )
-            self.df["max_val"][i] = np.max(
-                [
-                    np.max(self.df["map1"][i]),
-                    np.max(self.df["map2"][i]),
-                    np.max(self.df["map3"][i]),
-                ]
-            )
+            self.df["min_val"][i] = np.min(self.df["combined"][i])
+            self.df["max_val"][i] = np.max(self.df["map1"][i])
+
             self.df["map1"][i] = (self.df["map1"][i] - self.df["min_val"][i]) / (
                 self.df["max_val"][i] - self.df["min_val"][i]
             )
@@ -242,7 +236,8 @@ class Dataset:
     def rev_preprocess(self, map, i):
         min_val, max_val = self.df["min_val"][i], self.df["max_val"][i]
         map = map * (max_val - min_val) + min_val
-        map = np.power(10, map)
+        if self.log:
+            map = np.power(10, map)
         return map
 
     def embed_map(self, pred, i):
@@ -267,9 +262,17 @@ class Dataset:
         ]
         return map
 
-    def compute_stray_light(self, map):
-        i, j = self.get_center(map)
-        nominal = np.sum(map[i : i + 2, j : j + 2])
+    def compute_stray_light(self, map, map_ref=None, nom=None):
+        if map_ref is None:
+            map_ref = map.copy()
+        #get the 4 highest values of the map
+        """ max_values = np.sort(map.flatten())[-4:]
+        nominal = np.sum(max_values) """
+        i, j = self.get_center(map_ref)
+        if nom is None:
+            nominal = np.sum(map_ref[i : i + 2, j : j + 2])
+        else:
+            nominal = nom
         map = map / nominal
         #map[i : i + 2, j : j + 2] = 0
         # set a 20 radius disc around (i,j) to 0
@@ -279,7 +282,7 @@ class Dataset:
                     continue
                 if np.sqrt((x - i) ** 2 + (y - j) ** 2) < 20:
                     map[x, y] = 0
-        return i, j, np.sum(map)
+        return i, j, np.sum(map), nominal
 
     def crop_data(self, crop_size):
         self.crop_size = crop_size
